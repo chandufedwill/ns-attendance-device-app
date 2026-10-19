@@ -1,0 +1,46 @@
+{
+  "expo": {
+    "name": "NationSkills Attendance",
+    "slug": "ns-attendance-device-app",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "icon": "./assets/images/icon.png",
+    "scheme": "nsattendance",
+    "userInterfaceStyle": "dark",
+    "newArchEnabled": true,
+    "splash": {
+      "image": "./assets/images/splash-icon.png",
+      "resizeMode": "contain",
+      "backgroundColor": "#111827"
+    },
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.nationskills.attendance",
+      "infoPlist": {
+        "NSCameraUsageDescription": "NationSkills Attendance requires camera access to scan student attendance QR codes."
+      }
+    },
+    "android": {
+      "package": "com.nationskills.attendance",
+      "adaptiveIcon": {
+        "foregroundImage": "./assets/images/adaptive-icon.png",
+        "backgroundColor": "#111827"
+      },
+      "permissions": [
+        "android.permission.CAMERA"
+      ]
+    },
+    "web": {
+      "favicon": "./assets/images/icon.png"
+    },
+    "plugins": [
+      "expo-router",
+      [
+        "expo-camera",
+        {
+          "cameraPermission": "Allow NationSkills Attendance to scan student QR codes."
+        }
+      ]
+    ]
+  }
+}

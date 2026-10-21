@@ -260,27 +260,59 @@ export const DeviceApiService = {
     code: string
   ): Promise<AttendanceEligibilityResponse> => {
     const token = await DeviceApiService.getStoredToken();
-    const url = `${AppConfig.API_BASE_URL}/attendance/eligibility`;
+    // Jovin's latest spec uses /attendance/identify with { method, code }, fallback to /attendance/eligibility
+    const identifyUrl = `${AppConfig.API_BASE_URL}/attendance/identify`;
+    const eligibilityUrl = `${AppConfig.API_BASE_URL}/attendance/eligibility`;
 
     const reqBody = {
       method,
       code: code.trim(),
     };
 
-    console.log(`\n📡 [DeviceApiService] POST ${url}`);
-    console.log(`📤 [DeviceApiService] Check Eligibility Payload Sent to Server:\n`, JSON.stringify(reqBody, null, 2));
+    console.log(`\n📡 [DeviceApiService] Identifying via: ${method} code: [${code.trim()}]`);
+    console.log(`📤 [DeviceApiService] Payload Sent to Server:\n`, JSON.stringify(reqBody, null, 2));
 
-    const response = await fetch(url, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${token}`,
-        Accept: 'application/json',
-      },
-      body: JSON.stringify(reqBody),
-    });
+    let response: Response;
+    let data: any = null;
 
-    const data = await response.json().catch(() => null);
+    try {
+      response = await fetch(identifyUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/json',
+        },
+        body: JSON.stringify(reqBody),
+      });
+
+      if (response.status === 404) {
+        console.log(`📡 [DeviceApiService] /identify returned 404, falling back to ${eligibilityUrl}`);
+        response = await fetch(eligibilityUrl, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${token}`,
+            Accept: 'application/json',
+          },
+          body: JSON.stringify(reqBody),
+        });
+      }
+      data = await response.json().catch(() => null);
+    } catch (err) {
+      console.warn('📡 [DeviceApiService] Fetch attempt encountered error, falling back to eligibility:', err);
+      response = await fetch(eligibilityUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/json',
+        },
+        body: JSON.stringify(reqBody),
+      });
+      data = await response.json().catch(() => null);
+    }
+
     console.log(`📥 [DeviceApiService] Server Response [${response.status}]:\n`, JSON.stringify(data, null, 2));
 
     if (!response.ok) {
@@ -438,5 +470,13 @@ export const DeviceApiService = {
       organisationName: respPayload?.organisationName,
       locationName: respPayload?.locationName,
     };
+  },
+
+  /**
+   * Alias for identifying student by QR or PIN:
+   * POST /attendance/identify with { method, code }
+   */
+  identify: async (method: 'QR' | 'PIN', code: string): Promise<AttendanceEligibilityResponse> => {
+    return DeviceApiService.checkEligibility(method, code);
   },
 };

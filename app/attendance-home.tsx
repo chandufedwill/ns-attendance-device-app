@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   ScrollView,
   ActivityIndicator,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -13,29 +14,35 @@ import { MaterialIcons } from '@expo/vector-icons';
 import * as SecureStore from 'expo-secure-store';
 import { Colors } from '../constants/theme';
 import { AppConfig } from '../constants/config';
-import { ClassSessionSummary } from '../types/attendance';
 import { DeviceApiService } from '../services/DeviceApiService';
+import { KioskBrandHeader } from '../components/KioskBrandHeader';
+import { KioskService } from '../services/KioskService';
 
 export default function AttendanceHomeScreen() {
   const router = useRouter();
   const params = useLocalSearchParams<{ locationName?: string }>();
   const [activeLocation, setActiveLocation] = useState(params.locationName || '');
   const [orgName, setOrgName] = useState('');
+  const [orgLogoUrl, setOrgLogoUrl] = useState<string | null>(null);
+  const [logoFailed, setLogoFailed] = useState(false);
   const [deviceName, setDeviceName] = useState('');
-  const [sessions, setSessions] = useState<ClassSessionSummary[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
+    KioskService.init();
+
     const loadData = async () => {
       setLoading(true);
       try {
-        // Load configuration (organisation name, location, device name)
         const config = await DeviceApiService.getDeviceConfig().catch(() => null);
         if (config?.organisationName) {
           setOrgName(config.organisationName);
         }
         if (config?.deviceName) {
           setDeviceName(config.deviceName);
+        }
+        if (config?.organisationLogoUrl) {
+          setOrgLogoUrl(config.organisationLogoUrl);
         }
 
         const storedLocation = await SecureStore.getItemAsync(AppConfig.STORAGE_KEYS.ACTIVE_LOCATION);
@@ -48,126 +55,151 @@ export default function AttendanceHomeScreen() {
           setActiveLocation(config.locationName);
         }
       } catch (err) {
-        console.warn('Failed loading home data:', err);
+        console.warn('Failed loading home config:', err);
       } finally {
         setLoading(false);
       }
     };
 
     loadData();
-  }, []);
+  }, [params.locationName]);
 
-  const todayFormatted = new Date().toLocaleDateString('en-GB', {
-    weekday: 'long',
-    day: 'numeric',
-    month: 'short',
-    year: 'numeric',
-  });
+  // Formatted date string (e.g. "Today • Friday 16 Oct 2026")
+  const todayFormatted = (() => {
+    try {
+      const d = new Date();
+      const weekday = d.toLocaleDateString('en-GB', { weekday: 'long' });
+      const day = d.getDate();
+      const month = d.toLocaleDateString('en-GB', { month: 'short' });
+      const year = d.getFullYear();
+      return `Today • ${weekday} ${day} ${month} ${year}`;
+    } catch {
+      return 'Today';
+    }
+  })();
 
   return (
     <SafeAreaView style={styles.safeArea}>
       <View style={styles.container}>
-        {/* Top Header */}
-        <View style={styles.headerRow}>
-          <View style={{ width: 40 }} />
-          <View style={styles.brandCenter}>
-            <Text style={styles.brandTitle}>NationSkills</Text>
-            {orgName ? <Text style={styles.brandSubtitle}>{orgName}</Text> : null}
-            {deviceName ? (
-              <View style={styles.deviceChipRow}>
-                <MaterialIcons name="tablet-android" size={13} color={Colors.primary} />
-                <Text style={styles.deviceChipText}>{deviceName}</Text>
-              </View>
-            ) : null}
-          </View>
+        {/* Screen 1: Top Brand Header */}
+        <KioskBrandHeader
+          subtitle="Attendance Kiosk"
+          showSettings
+          onSettings={() => router.push('/staff-login' as any)}
+        />
+
+        <ScrollView
+          contentContainerStyle={styles.scrollBody}
+          showsVerticalScrollIndicator={false}
+        >
+          {/* Organisation & Location Card */}
           <TouchableOpacity
-            style={styles.settingsBtn}
-            onPress={() => router.push('/staff-login' as any)}
-            activeOpacity={0.7}
-          >
-            <MaterialIcons name="settings" size={24} color={Colors.text} />
-          </TouchableOpacity>
-        </View>
-
-        <ScrollView contentContainerStyle={styles.scrollBody} showsVerticalScrollIndicator={false}>
-          {/* Location & Date Card */}
-          <View style={styles.locationBanner}>
-            <View style={styles.locationRow}>
-              <MaterialIcons name="location-on" size={22} color={Colors.primary} />
-              <Text style={styles.locationText} numberOfLines={1} ellipsizeMode="tail">
-                {activeLocation || 'Binley'}
-              </Text>
-            </View>
-            <Text style={styles.dateText}>Today • {todayFormatted}</Text>
-          </View>
-
-          {/* Today's Sessions Section */}
-          <View style={styles.sectionHeaderRow}>
-            <Text style={styles.sectionHeading}>Today's sessions</Text>
-            {sessions.length > 0 && (
-              <View style={styles.sessionCountPill}>
-                <Text style={styles.sessionCountText}>{sessions.length} Active</Text>
-              </View>
-            )}
-          </View>
-
-          {loading ? (
-            <View style={{ padding: 24, alignItems: 'center' }}>
-              <ActivityIndicator size="small" color={Colors.primary} />
-            </View>
-          ) : sessions.length === 0 ? (
-            <View style={styles.emptySessionsCard}>
-              <MaterialIcons name="event-available" size={32} color={Colors.textSecondary} />
-              <Text style={styles.emptySessionsTitle}>Ready to Record Attendance</Text>
-              <Text style={styles.emptySessionsSubtitle}>
-                No scheduled session limits configured. Tap 'Start Attendance' to scan student QR passes or enter PINs.
-              </Text>
-            </View>
-          ) : (
-            <View style={styles.sessionList}>
-              {sessions.map((session) => (
-                <View key={session.id} style={styles.sessionCard}>
-                  <View style={styles.sessionIconBox}>
-                    <MaterialIcons name="groups" size={24} color={Colors.primary} />
-                  </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.sessionTitle}>{session.className}</Text>
-                    <Text style={styles.sessionTimeText}>
-                      {session.startTime} – {session.endTime}
-                    </Text>
-                    {session.expectedCount !== undefined && (
-                      <Text style={styles.sessionMembersText}>
-                        {session.expectedCount} members
-                      </Text>
-                    )}
-                  </View>
-                  <MaterialIcons name="chevron-right" size={22} color={Colors.textSecondary} />
-                </View>
-              ))}
-            </View>
-          )}
-        </ScrollView>
-
-        {/* Bottom Actions */}
-        <View style={styles.bottomActions}>
-          <TouchableOpacity
-            style={styles.startAttendanceBtn}
-            activeOpacity={0.85}
-            onPress={() => router.push('/scanner' as any)}
-          >
-            <MaterialIcons name="qr-code-scanner" size={22} color={Colors.textWhite} />
-            <Text style={styles.startAttendanceBtnText}>Start Attendance</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={styles.changeLocationBtn}
+            style={styles.orgCard}
             onPress={() => router.push('/select-location' as any)}
-            activeOpacity={0.7}
+            activeOpacity={0.8}
           >
-            <MaterialIcons name="swap-horiz" size={18} color={Colors.textSecondary} />
-            <Text style={styles.changeLocationText}>Change location</Text>
+            {/* Org Logo / Icon */}
+            <View style={styles.orgLogoBox}>
+              {orgLogoUrl && !logoFailed ? (
+                <Image
+                  source={{ uri: orgLogoUrl }}
+                  style={styles.orgLogoImage}
+                  onError={() => setLogoFailed(true)}
+                  resizeMode="contain"
+                />
+              ) : (
+                <View style={styles.orgLogoFallback}>
+                  <MaterialIcons name="fitness-center" size={24} color="#BE185D" />
+                </View>
+              )}
+            </View>
+
+            {/* Org Details */}
+            <View style={styles.orgDetailsCol}>
+              <Text style={styles.orgNameText} numberOfLines={1}>
+                {orgName || 'NationSkills Partner'}
+              </Text>
+              <View style={styles.orgLocationRow}>
+                <MaterialIcons name="location-on" size={15} color="#0D9488" />
+                <Text style={styles.orgLocationText} numberOfLines={1}>
+                  {activeLocation || 'Attendance Station'}
+                </Text>
+              </View>
+            </View>
+
+            <MaterialIcons name="chevron-right" size={22} color={Colors.textSecondary} />
           </TouchableOpacity>
-        </View>
+
+          {/* Date Subtitle */}
+          <Text style={styles.dateLabel}>{todayFormatted}</Text>
+
+          {/* Ready For Attendance Heading Banner */}
+          <View style={styles.readyBanner}>
+            <View style={styles.readyIconCircle}>
+              <MaterialIcons name="groups" size={22} color="#0F766E" />
+            </View>
+            <View style={styles.readyTextCol}>
+              <Text style={styles.readyTitle}>Ready for Attendance</Text>
+              <Text style={styles.readySubtitle}>Choose how you want to check in</Text>
+            </View>
+          </View>
+
+          {/* Option 1: Scan QR Code (Deep Teal) */}
+          <TouchableOpacity
+            style={styles.qrOptionCard}
+            onPress={() => router.push('/scanner' as any)}
+            activeOpacity={0.85}
+          >
+            <View style={styles.qrIconBox}>
+              <MaterialIcons name="qr-code-2" size={32} color="#FFFFFF" />
+            </View>
+            <View style={styles.optionTextCol}>
+              <Text style={styles.qrOptionTitle}>Scan QR Code</Text>
+              <Text style={styles.qrOptionSubtitle}>
+                Scan your member QR code to mark attendance
+              </Text>
+            </View>
+            <MaterialIcons name="chevron-right" size={26} color="#FFFFFF" />
+          </TouchableOpacity>
+
+          {/* Option 2: Enter PIN */}
+          <TouchableOpacity
+            style={styles.pinOptionCard}
+            onPress={() => router.push('/pin-attendance' as any)}
+            activeOpacity={0.8}
+          >
+            <View style={styles.pinIconBox}>
+              <MaterialIcons name="dialpad" size={26} color="#0D3838" />
+            </View>
+            <View style={styles.optionTextCol}>
+              <Text style={styles.pinOptionTitle}>Enter PIN</Text>
+              <Text style={styles.pinOptionSubtitle}>
+                Enter your 6-digit PIN to mark attendance
+              </Text>
+            </View>
+            <MaterialIcons name="chevron-right" size={24} color={Colors.textSecondary} />
+          </TouchableOpacity>
+
+          {/* Option 3: Face Recognition (Coming Soon) */}
+          <View style={styles.faceOptionCard}>
+            <View style={styles.faceIconBox}>
+              <MaterialIcons name="face" size={26} color="#94A3B8" />
+            </View>
+            <View style={styles.optionTextCol}>
+              <Text style={styles.faceOptionTitle}>Face Recognition</Text>
+              <Text style={styles.faceOptionSubtitle}>Coming soon</Text>
+            </View>
+          </View>
+
+          {/* Bottom Help Card */}
+          <View style={styles.helpCard}>
+            <MaterialIcons name="info-outline" size={20} color="#64748B" />
+            <View style={styles.helpTextCol}>
+              <Text style={styles.helpTitle}>Need help?</Text>
+              <Text style={styles.helpSubtitle}>Ask an instructor for assistance.</Text>
+            </View>
+          </View>
+        </ScrollView>
       </View>
     </SafeAreaView>
   );
@@ -176,230 +208,242 @@ export default function AttendanceHomeScreen() {
 const styles = StyleSheet.create({
   safeArea: {
     flex: 1,
-    backgroundColor: Colors.background,
+    backgroundColor: '#F8FAFC',
   },
   container: {
     flex: 1,
     maxWidth: 540,
     width: '100%',
     alignSelf: 'center',
-    paddingHorizontal: 20,
-  },
-  headerRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    paddingVertical: 12,
-  },
-  brandCenter: {
-    alignItems: 'center',
-  },
-  brandTitle: {
-    fontSize: 20,
-    fontWeight: '800',
-    color: Colors.text,
-  },
-  brandSubtitle: {
-    fontSize: 13,
-    color: Colors.textSecondary,
-    fontWeight: '600',
-  },
-  deviceChipRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: Colors.primaryLight,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 8,
-    marginTop: 4,
-  },
-  deviceChipText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: Colors.primary,
-  },
-  settingsBtn: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    backgroundColor: Colors.surfaceSubtle,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   scrollBody: {
-    paddingVertical: 12,
-    gap: 16,
+    paddingHorizontal: 20,
+    paddingTop: 8,
+    paddingBottom: 24,
+    gap: 14,
   },
-  locationBanner: {
-    backgroundColor: Colors.cardBackground,
+  orgCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
     borderRadius: 16,
-    padding: 16,
+    paddingHorizontal: 16,
+    paddingVertical: 14,
     borderWidth: 1,
-    borderColor: Colors.border,
-    gap: 4,
-  },
-  locationHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  deviceLocationBadge: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    backgroundColor: Colors.surfaceSubtle,
-    paddingHorizontal: 8,
-    paddingVertical: 3,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: Colors.borderLight,
-  },
-  liveOnlineDot: {
-    width: 6,
-    height: 6,
-    borderRadius: 3,
-    backgroundColor: Colors.success,
-  },
-  deviceLocationBadgeText: {
-    fontSize: 11,
-    fontWeight: '700',
-    color: Colors.textSecondary,
-  },
-  locationRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-  },
-  locationText: {
-    fontSize: 18,
-    fontWeight: '800',
-    color: Colors.text,
-  },
-  dateText: {
-    fontSize: 13,
-    color: Colors.textSecondary,
-    fontWeight: '500',
-    marginLeft: 26,
-  },
-  sectionHeaderRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 8,
-  },
-  sectionHeading: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: Colors.text,
-  },
-  sessionCountPill: {
-    backgroundColor: Colors.primaryLight,
-    paddingHorizontal: 10,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  sessionCountText: {
-    fontSize: 12,
-    fontWeight: '700',
-    color: Colors.primary,
-  },
-  sessionList: {
+    borderColor: '#E2E8F0',
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.04,
+    shadowRadius: 6,
+    elevation: 2,
     gap: 12,
   },
-  sessionCard: {
+  orgLogoBox: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    overflow: 'hidden',
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: '#FDF2F8',
+  },
+  orgLogoImage: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+  },
+  orgLogoFallback: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: '#FCE7F3',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  orgDetailsCol: {
+    flex: 1,
+  },
+  orgNameText: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  orgLocationRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.cardBackground,
+    gap: 4,
+    marginTop: 3,
+  },
+  orgLocationText: {
+    fontSize: 13,
+    color: '#64748B',
+    fontWeight: '600',
+  },
+  dateLabel: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: '#64748B',
+    textAlign: 'center',
+    marginVertical: 2,
+  },
+  readyBanner: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+    borderRadius: 14,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    gap: 12,
+  },
+  readyIconCircle: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: '#E6F4F4',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  readyTextCol: {
+    flex: 1,
+  },
+  readyTitle: {
+    fontSize: 15,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  readySubtitle: {
+    fontSize: 12,
+    color: '#64748B',
+    fontWeight: '500',
+    marginTop: 1,
+  },
+  qrOptionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#0D3838', // Deep teal from Jovin blueprint
     borderRadius: 16,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    paddingHorizontal: 18,
+    paddingVertical: 20,
     gap: 14,
-    shadowColor: Colors.text,
+    shadowColor: '#0D3838',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.25,
+    shadowRadius: 10,
+    elevation: 4,
+  },
+  qrIconBox: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: 'rgba(255, 255, 255, 0.12)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  optionTextCol: {
+    flex: 1,
+  },
+  qrOptionTitle: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: '#FFFFFF',
+  },
+  qrOptionSubtitle: {
+    fontSize: 12,
+    color: '#D1E7E7',
+    fontWeight: '500',
+    marginTop: 3,
+    lineHeight: 16,
+  },
+  pinOptionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
+    borderRadius: 16,
+    paddingHorizontal: 18,
+    paddingVertical: 18,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    gap: 14,
+    shadowColor: '#000000',
     shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.03,
+    shadowOpacity: 0.04,
     shadowRadius: 6,
     elevation: 2,
   },
-  sessionIconBox: {
-    width: 44,
-    height: 44,
+  pinIconBox: {
+    width: 48,
+    height: 48,
     borderRadius: 12,
-    backgroundColor: Colors.surfaceSubtle,
-    justifyContent: 'center',
+    backgroundColor: '#E6F4F4',
     alignItems: 'center',
+    justifyContent: 'center',
   },
-  sessionTitle: {
+  pinOptionTitle: {
+    fontSize: 16,
+    fontWeight: '800',
+    color: '#0F172A',
+  },
+  pinOptionSubtitle: {
+    fontSize: 12,
+    color: '#64748B',
+    fontWeight: '500',
+    marginTop: 2,
+    lineHeight: 16,
+  },
+  faceOptionCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#F1F5F9',
+    borderRadius: 16,
+    paddingHorizontal: 18,
+    paddingVertical: 16,
+    borderWidth: 1,
+    borderColor: '#E2E8F0',
+    gap: 14,
+    opacity: 0.65,
+  },
+  faceIconBox: {
+    width: 48,
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: '#E2E8F0',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  faceOptionTitle: {
     fontSize: 15,
     fontWeight: '700',
-    color: Colors.text,
+    color: '#64748B',
   },
-  sessionTimeText: {
-    fontSize: 13,
-    color: Colors.textSecondary,
+  faceOptionSubtitle: {
+    fontSize: 12,
+    color: '#94A3B8',
+    fontWeight: '500',
     marginTop: 2,
   },
-  sessionMembersText: {
-    fontSize: 12,
-    color: Colors.textMuted,
-    marginTop: 1,
-  },
-  bottomActions: {
-    paddingVertical: 16,
-    gap: 12,
-  },
-  startAttendanceBtn: {
-    height: 54,
-    backgroundColor: Colors.primary,
+  helpCard: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: '#FFFFFF',
     borderRadius: 14,
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    gap: 10,
-    shadowColor: Colors.primary,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.2,
-    shadowRadius: 8,
-    elevation: 3,
-  },
-  startAttendanceBtnText: {
-    fontSize: 16,
-    fontWeight: '700',
-    color: Colors.textWhite,
-  },
-  changeLocationBtn: {
-    flexDirection: 'row',
-    justifyContent: 'center',
-    alignItems: 'center',
-    paddingVertical: 6,
-    gap: 6,
-  },
-  changeLocationText: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.textSecondary,
-  },
-  emptySessionsCard: {
-    backgroundColor: Colors.cardBackground,
-    borderRadius: 16,
-    padding: 24,
-    alignItems: 'center',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
     borderWidth: 1,
-    borderColor: Colors.border,
-    gap: 8,
-    marginVertical: 8,
+    borderColor: '#E2E8F0',
+    gap: 12,
+    marginTop: 4,
   },
-  emptySessionsTitle: {
-    fontSize: 15,
+  helpTextCol: {
+    flex: 1,
+  },
+  helpTitle: {
+    fontSize: 12,
     fontWeight: '700',
-    color: Colors.text,
-    textAlign: 'center',
+    color: '#0F172A',
   },
-  emptySessionsSubtitle: {
-    fontSize: 13,
-    color: Colors.textSecondary,
-    textAlign: 'center',
-    lineHeight: 18,
+  helpSubtitle: {
+    fontSize: 12,
+    color: '#64748B',
+    marginTop: 1,
   },
 });

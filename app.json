@@ -27,7 +27,8 @@
         "backgroundColor": "#111827"
       },
       "permissions": [
-        "android.permission.CAMERA"
+        "android.permission.CAMERA",
+        "android.permission.RECORD_AUDIO"
       ]
     },
     "web": {
@@ -41,6 +42,12 @@
           "cameraPermission": "Allow NationSkills Attendance to scan student QR codes."
         }
       ]
-    ]
+    ],
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "a29821b0-4826-4cc8-83ef-c6ea25d04708"
+      }
+    }
   }
 }

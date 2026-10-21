@@ -24,6 +24,7 @@ import {
   AttendanceEligibilityResponse,
   EligibilityStatus,
 } from '../types/attendance';
+import { CheckInSuccessView } from '../components/CheckInSuccessView';
 
 function StudentAvatar({ name, imageUrl }: { name?: string; imageUrl?: string | null }) {
   const [imgError, setImgError] = useState(false);
@@ -311,15 +312,20 @@ export default function MainQRScannerScreen() {
         <View style={styles.topHeader}>
           <TouchableOpacity
             style={styles.iconCircleBtn}
-            onPress={() => router.back()}
+            onPress={() => router.replace('/attendance-home' as any)}
             activeOpacity={0.7}
           >
             <MaterialIcons name="arrow-back" size={24} color={Colors.textWhite} />
           </TouchableOpacity>
 
           <View style={styles.topHeaderCenter}>
-            <Text style={styles.topHeaderTitle}>NationSkills</Text>
-            <Text style={styles.topHeaderSub}>{orgName || 'Attendance'}{activeLocation ? ` • ${activeLocation}` : ''}</Text>
+            <Image
+              source={require('../assets/images/nationskills-logo.png')}
+              style={styles.headerLogo}
+              resizeMode="contain"
+            />
+            <Text style={styles.topHeaderOrg}>{orgName || 'NationSkills'}</Text>
+            <Text style={styles.topHeaderLoc}>{activeLocation || 'Attendance Station'}</Text>
           </View>
 
           <TouchableOpacity
@@ -352,95 +358,78 @@ export default function MainQRScannerScreen() {
           </View>
 
           <Text style={styles.scannerInstructions}>Scan your QR code</Text>
-          <Text style={styles.scannerSubInstructions}>Hold your code inside the frame</Text>
-
-          {/* Secondary Action: Use PIN Instead */}
-          <TouchableOpacity
-            style={styles.usePinBtn}
-            activeOpacity={0.8}
-            onPress={() => router.push('/pin-attendance' as any)}
-          >
-            <MaterialIcons name="dialpad" size={20} color={Colors.text} />
-            <Text style={styles.usePinBtnText}>Use PIN instead</Text>
-          </TouchableOpacity>
+          <Text style={styles.scannerSubInstructions}>Hold your code within the frame</Text>
         </View>
 
-        {/* Bottom Bar */}
-        <View style={styles.bottomBar}>
-          <View style={styles.statusPill}>
-            <View style={styles.liveGreenDot} />
-            <Text style={styles.statusPillText}>
-              {deviceName ? `${deviceName} • ` : ''}{activeLocation || 'Attendance Kiosk'} • Ready
-            </Text>
-          </View>
-
+        {/* Bottom Bar: Cancel Button */}
+        <View style={styles.bottomBarCentered}>
           <TouchableOpacity
-            style={styles.staffBtn}
-            onPress={() => router.push('/staff-login' as any)}
+            style={styles.cancelScanBtn}
+            onPress={() => router.replace('/attendance-home' as any)}
             activeOpacity={0.8}
           >
-            <MaterialIcons name="lock" size={16} color={Colors.textWhite} />
-            <Text style={styles.staffBtnText}>Staff</Text>
+            <MaterialIcons name="close" size={18} color="#0F172A" />
+            <Text style={styles.cancelScanBtnText}>Cancel</Text>
           </TouchableOpacity>
         </View>
       </SafeAreaView>
 
       {/* ======================================================== */}
-      {/* RESULT MODALS (Screens 6 to 13)                          */}
+      {/* RESULT MODALS (Screen 3 Check-In Success & Statuses)     */}
       {/* ======================================================== */}
-      <Modal visible={modalVisible} transparent animationType="fade" onRequestClose={closeModal}>
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            {/* Screen 6 & 9: Check-in / Check-out Success */}
-            {(modalResult?.status === 'CHECK_IN' || modalResult?.status === 'CHECK_OUT') && (
-              <>
-                <View style={[styles.statusIconCircle, { backgroundColor: Colors.success }]}>
-                  <MaterialIcons name="check" size={48} color={Colors.textWhite} />
-                </View>
-                <Text style={styles.modalHeading}>
-                  {modalResult.status === 'CHECK_IN' ? 'Checked in successfully!' : 'Checked out successfully!'}
-                </Text>
+      <Modal visible={modalVisible} transparent={modalResult?.status !== 'CHECK_IN'} animationType="fade" onRequestClose={closeModal}>
+        {modalResult?.status === 'CHECK_IN' ? (
+          <SafeAreaView style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
+            <CheckInSuccessView
+              studentName={modalResult.studentName}
+              profileImageUrl={modalResult.profileImageUrl}
+              className={modalResult.className || 'Class Session'}
+              locationName={activeLocation || orgName || 'Attendance Station'}
+              checkInTime={modalResult.checkInTime}
+              autoCloseDurationMs={2800}
+              onDismiss={() => {
+                closeModal();
+                router.replace('/attendance-home' as any);
+              }}
+            />
+          </SafeAreaView>
+        ) : (
+          <View style={styles.modalBackdrop}>
+            <View style={styles.modalCard}>
+              {modalResult?.status === 'CHECK_OUT' && (
+                <>
+                  <View style={[styles.statusIconCircle, { backgroundColor: Colors.success }]}>
+                    <MaterialIcons name="check" size={48} color={Colors.textWhite} />
+                  </View>
+                  <Text style={styles.modalHeading}>Checked out successfully!</Text>
 
-                <View style={styles.modalStudentBox}>
-                  <StudentAvatar
-                    name={modalResult.studentName}
-                    imageUrl={modalResult.profileImageUrl}
-                  />
-                  <Text style={styles.modalStudentName}>{modalResult.studentName || 'Student Member'}</Text>
-                  {modalResult.className ? <Text style={styles.modalSessionTime}>{modalResult.className}</Text> : null}
-                  {modalResult.sessionTime ? <Text style={styles.modalSessionTime}>{modalResult.sessionTime}</Text> : null}
-                </View>
+                  <View style={styles.modalStudentBox}>
+                    <StudentAvatar
+                      name={modalResult.studentName}
+                      imageUrl={modalResult.profileImageUrl}
+                    />
+                    <Text style={styles.modalStudentName}>{modalResult.studentName || 'Student Member'}</Text>
+                    {modalResult.className ? <Text style={styles.modalSessionTime}>{modalResult.className}</Text> : null}
+                    {modalResult.sessionTime ? <Text style={styles.modalSessionTime}>{modalResult.sessionTime}</Text> : null}
+                  </View>
 
-                <View style={styles.timestampRow}>
-                  {modalResult.checkInTime && (
-                    <Text style={styles.timestampText}>Checked in at {modalResult.checkInTime}</Text>
-                  )}
-                  {modalResult.checkOutTime && (
-                    <Text style={styles.timestampText}> • Checked out at {modalResult.checkOutTime}</Text>
-                  )}
-                </View>
+                  <View style={styles.timestampRow}>
+                    {modalResult.checkOutTime && (
+                      <Text style={styles.timestampText}>Checked out at {modalResult.checkOutTime}</Text>
+                    )}
+                  </View>
 
-                {/* Animated Return Progress Indicator */}
-                <View style={styles.progressContainer}>
-                  <Animated.View
-                    style={[
-                      styles.progressBar,
-                      {
-                        width: progressAnim.interpolate({
-                          inputRange: [0, 1],
-                          outputRange: ['0%', '100%'],
-                        }),
-                      },
-                    ]}
-                  />
-                  <Text style={styles.returningText}>Returning to scanner...</Text>
-                </View>
-
-                <TouchableOpacity style={styles.modalCloseBtn} onPress={closeModal}>
-                  <Text style={styles.modalCloseBtnText}>Done</Text>
-                </TouchableOpacity>
-              </>
-            )}
+                  <TouchableOpacity
+                    style={styles.modalCloseBtn}
+                    onPress={() => {
+                      closeModal();
+                      router.replace('/attendance-home' as any);
+                    }}
+                  >
+                    <Text style={styles.modalCloseBtnText}>Done</Text>
+                  </TouchableOpacity>
+                </>
+              )}
 
             {/* Screen 7 & 8: Already Checked In (Prompt for Check-out) */}
             {modalResult?.status === 'ALREADY_CHECKED_IN' && (
@@ -606,6 +595,7 @@ export default function MainQRScannerScreen() {
             )}
           </View>
         </View>
+        )}
       </Modal>
     </View>
   );
@@ -682,15 +672,52 @@ const styles = StyleSheet.create({
   topHeaderCenter: {
     alignItems: 'center',
   },
-  topHeaderTitle: {
-    fontSize: 18,
+  headerLogo: {
+    width: 130,
+    height: 40,
+    marginBottom: 2,
+  },
+  topHeaderOrg: {
+    fontSize: 14,
     fontWeight: '800',
     color: Colors.textWhite,
+    textShadowColor: 'rgba(0,0,0,0.6)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 3,
   },
-  topHeaderSub: {
-    fontSize: 13,
+  topHeaderLoc: {
+    fontSize: 12,
     color: 'rgba(255,255,255,0.85)',
     fontWeight: '500',
+    marginTop: 1,
+    textShadowColor: 'rgba(0,0,0,0.6)',
+    textShadowOffset: { width: 0, height: 1 },
+    textShadowRadius: 2,
+  },
+  bottomBarCentered: {
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingBottom: 28,
+    width: '100%',
+  },
+  cancelScanBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#FFFFFF',
+    paddingHorizontal: 28,
+    paddingVertical: 12,
+    borderRadius: 24,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 5,
+    elevation: 4,
+  },
+  cancelScanBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0F172A',
   },
   reticleContainer: {
     alignItems: 'center',

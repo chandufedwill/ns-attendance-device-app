@@ -116,6 +116,8 @@ export default function PinAttendanceScreen() {
         let msg = eligibility.message || 'Invalid PIN or no eligible active session.';
         if (eligibility.status === 'NO_SESSION' && eligibility.studentName) {
           msg = `Hi ${eligibility.studentName}, no active sessions scheduled right now.`;
+        } else if (eligibility.status === 'OUTSIDE_WINDOW' && eligibility.studentName) {
+          msg = `Hi ${eligibility.studentName}, outside permitted check-in window for ${eligibility.className || 'session'}.`;
         } else if (eligibility.status === 'ALREADY_CHECKED_IN') {
           msg = `Already checked in for ${eligibility.className || 'this session'}.`;
         } else if (eligibility.status === 'ALREADY_ATTENDED') {

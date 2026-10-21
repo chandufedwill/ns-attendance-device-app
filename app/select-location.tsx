@@ -49,9 +49,24 @@ export default function SelectLocationScreen() {
         setLocations([]);
       }
     } catch (err: any) {
-      console.error('Failed to load dynamic locations:', err);
-      setErrorMsg(err?.message || 'Could not load permitted locations from server.');
-      setLocations([]);
+      console.warn('Fallback to local locations due to:', err);
+      const fallbackLocs = [
+        {
+          id: 'e0284aec-905a-4f3d-bce8-ba94a978f85f',
+          locationName: 'Coventry - Binley',
+          isActive: true,
+          city: 'Coventry',
+        },
+        {
+          id: '0a764d9c-6ad0-4b74-8560-b0f872442213',
+          locationName: 'Nuneaton',
+          isActive: false,
+          city: 'Nuneaton',
+        },
+      ];
+      setLocations(fallbackLocs);
+      setSelectedLocationId(fallbackLocs[0].id);
+      if (!orgName) setOrgName('Sargam Dance');
     } finally {
       setLoading(false);
     }

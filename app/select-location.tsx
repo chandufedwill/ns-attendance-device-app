@@ -16,6 +16,8 @@ import { AppConfig } from '../constants/config';
 import { DeviceApiService } from '../services/DeviceApiService';
 import { AttendanceLocation } from '../types/attendance';
 
+import { KioskBrandHeader } from '../components/KioskBrandHeader';
+
 export default function SelectLocationScreen() {
   const router = useRouter();
   const [locations, setLocations] = useState<AttendanceLocation[]>([]);
@@ -24,6 +26,14 @@ export default function SelectLocationScreen() {
   const [orgName, setOrgName] = useState<string>('');
   const [deviceName, setDeviceName] = useState<string>('');
   const [errorMsg, setErrorMsg] = useState<string>('');
+
+  const handleGoBack = () => {
+    if (router.canGoBack()) {
+      router.back();
+    } else {
+      router.replace('/attendance-home' as any);
+    }
+  };
 
   const fetchLocations = async () => {
     setLoading(true);
@@ -65,6 +75,13 @@ export default function SelectLocationScreen() {
     setSelectedLocationId(loc.id);
     await SecureStore.setItemAsync(AppConfig.STORAGE_KEYS.ACTIVE_LOCATION, JSON.stringify(loc));
 
+    try {
+      console.log(`📍 [SelectLocation] Switching device location on server to ${loc.locationName} (${loc.id})...`);
+      await DeviceApiService.switchLocation({ locationId: loc.id });
+    } catch (e) {
+      console.warn('Failed to switch location on server:', e);
+    }
+
     // Navigate to Screen 4: Attendance Home
     router.replace({
       pathname: '/attendance-home' as any,
@@ -76,20 +93,29 @@ export default function SelectLocationScreen() {
     });
   };
 
+  const isAuthError =
+    errorMsg.toLowerCase().includes('credential') ||
+    errorMsg.toLowerCase().includes('revoked') ||
+    errorMsg.toLowerCase().includes('token') ||
+    errorMsg.toLowerCase().includes('unauthorized') ||
+    errorMsg.toLowerCase().includes('forbidden');
+
   return (
     <SafeAreaView style={styles.safeArea}>
+      {/* Top Header with NationSkills Logo & Back Arrow */}
+      <KioskBrandHeader
+        subtitle={orgName ? `${orgName} • Locations` : 'Select Location'}
+        showBack
+        onBack={handleGoBack}
+      />
+
       <ScrollView contentContainerStyle={styles.container}>
-        {/* Brand Header */}
-        <View style={styles.header}>
-          <Text style={styles.brandTitle}>NationSkills</Text>
-          {orgName ? <Text style={styles.brandSubtitle}>{orgName}</Text> : null}
-          {deviceName ? (
-            <View style={styles.deviceChipRow}>
-              <MaterialIcons name="tablet-android" size={13} color={Colors.primary} />
-              <Text style={styles.deviceChipText}>{deviceName}</Text>
-            </View>
-          ) : null}
-        </View>
+        {deviceName ? (
+          <View style={styles.deviceChipRow}>
+            <MaterialIcons name="tablet-android" size={13} color={Colors.primary} />
+            <Text style={styles.deviceChipText}>{deviceName}</Text>
+          </View>
+        ) : null}
 
         <Text style={styles.sectionHeading}>Select today's location</Text>
 
@@ -100,23 +126,54 @@ export default function SelectLocationScreen() {
           </View>
         ) : errorMsg ? (
           <View style={styles.emptyCard}>
-            <MaterialIcons name="error-outline" size={36} color={Colors.error} />
+            <MaterialIcons name="error-outline" size={40} color={Colors.error} />
             <Text style={styles.emptyTitle}>Could not load locations</Text>
             <Text style={styles.emptySubtitle}>{errorMsg}</Text>
-            <TouchableOpacity style={styles.retryBtn} onPress={fetchLocations}>
-              <Text style={styles.retryBtnText}>Retry</Text>
-            </TouchableOpacity>
+
+            <View style={styles.actionButtonsRow}>
+              <TouchableOpacity style={styles.retryBtn} onPress={fetchLocations}>
+                <MaterialIcons name="refresh" size={18} color={Colors.textWhite} />
+                <Text style={styles.retryBtnText}>Retry</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.backBtn} onPress={handleGoBack}>
+                <MaterialIcons name="arrow-back" size={18} color={Colors.text} />
+                <Text style={styles.backBtnText}>Go Back</Text>
+              </TouchableOpacity>
+            </View>
+
+            {isAuthError && (
+              <TouchableOpacity
+                style={styles.reconnectBtn}
+                onPress={async () => {
+                  await DeviceApiService.clearCredentials();
+                  router.replace('/' as any);
+                }}
+              >
+                <MaterialIcons name="vpn-key" size={16} color={Colors.primary} />
+                <Text style={styles.reconnectBtnText}>Enter New Setup Code</Text>
+              </TouchableOpacity>
+            )}
           </View>
         ) : locations.length === 0 ? (
           <View style={styles.emptyCard}>
-            <MaterialIcons name="location-off" size={36} color={Colors.textSecondary} />
+            <MaterialIcons name="location-off" size={40} color={Colors.textSecondary} />
             <Text style={styles.emptyTitle}>No Permitted Locations Found</Text>
             <Text style={styles.emptySubtitle}>
               This device has not been assigned any permitted locations in the admin portal yet.
             </Text>
-            <TouchableOpacity style={styles.retryBtn} onPress={fetchLocations}>
-              <Text style={styles.retryBtnText}>Refresh</Text>
-            </TouchableOpacity>
+
+            <View style={styles.actionButtonsRow}>
+              <TouchableOpacity style={styles.retryBtn} onPress={fetchLocations}>
+                <MaterialIcons name="refresh" size={18} color={Colors.textWhite} />
+                <Text style={styles.retryBtnText}>Refresh</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={styles.backBtn} onPress={handleGoBack}>
+                <MaterialIcons name="arrow-back" size={18} color={Colors.text} />
+                <Text style={styles.backBtnText}>Go Back</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         ) : (
           <View style={styles.locationsList}>
@@ -290,15 +347,57 @@ const styles = StyleSheet.create({
     lineHeight: 18,
   },
   retryBtn: {
-    marginTop: 8,
     backgroundColor: Colors.primary,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 12,
   },
   retryBtnText: {
     color: Colors.textWhite,
     fontWeight: '700',
     fontSize: 14,
+  },
+  actionButtonsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 12,
+    marginTop: 12,
+    width: '100%',
+  },
+  backBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+    backgroundColor: Colors.surfaceSubtle,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    paddingHorizontal: 18,
+    paddingVertical: 12,
+    borderRadius: 12,
+  },
+  backBtnText: {
+    color: Colors.text,
+    fontWeight: '700',
+    fontSize: 14,
+  },
+  reconnectBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    marginTop: 8,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 10,
+    backgroundColor: Colors.primaryLight + '35',
+  },
+  reconnectBtnText: {
+    color: Colors.primary,
+    fontWeight: '700',
+    fontSize: 13,
   },
 });

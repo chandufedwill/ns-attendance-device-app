@@ -10,6 +10,7 @@ import {
   Platform,
   ScrollView,
   Alert,
+  Image,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -88,13 +89,14 @@ export default function DeviceSetupScreen() {
         style={{ flex: 1 }}
       >
         <ScrollView contentContainerStyle={styles.scrollContent} keyboardShouldPersistTaps="handled">
-          {/* Brand Header */}
+          {/* Brand Header with Official Logo Banner */}
           <View style={styles.header}>
-            <View style={styles.logoBadge}>
-              <MaterialIcons name="fact-check" size={32} color={Colors.primary} />
-            </View>
-            <Text style={styles.appTitle}>NationSkills</Text>
-            <Text style={styles.appSubtitle}>Attendance</Text>
+            <Image
+              source={require('../assets/images/nationskills-logo.png')}
+              style={styles.logoBanner}
+              resizeMode="contain"
+            />
+            <Text style={styles.appSubtitle}>Attendance Device Setup</Text>
           </View>
 
           {/* Setup Card */}
@@ -189,23 +191,13 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 32,
   },
-  logoBadge: {
-    width: 64,
-    height: 64,
-    borderRadius: 20,
-    backgroundColor: Colors.primaryLight,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginBottom: 12,
-  },
-  appTitle: {
-    fontSize: 26,
-    fontWeight: '800',
-    color: Colors.text,
-    letterSpacing: -0.5,
+  logoBanner: {
+    width: 220,
+    height: 60,
+    marginBottom: 8,
   },
   appSubtitle: {
-    fontSize: 18,
+    fontSize: 15,
     fontWeight: '600',
     color: Colors.textSecondary,
     marginTop: 2,

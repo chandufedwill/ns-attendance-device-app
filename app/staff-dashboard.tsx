@@ -16,6 +16,7 @@ import { MaterialIcons } from '@expo/vector-icons';
 import { Colors } from '../constants/theme';
 import { DeviceApiService } from '../services/DeviceApiService';
 import { KioskService } from '../services/KioskService';
+import { DeviceSettingsService } from '../services/DeviceSettingsService';
 
 interface StudentRosterItem {
   id: string;
@@ -49,7 +50,6 @@ export default function StaffDashboardScreen() {
   const [sessions, setSessions] = useState<any[]>([]);
 
   React.useEffect(() => {
-    setKioskLocked(KioskService.getIsLocked());
     const loadConfig = async () => {
       try {
         const cfg = await DeviceApiService.getDeviceConfig().catch(() => null);
@@ -57,14 +57,33 @@ export default function StaffDashboardScreen() {
         if (cfg?.deviceName) setDeviceName(cfg.deviceName);
         if (cfg?.organisationName) setOrgName(cfg.organisationName);
         if (cfg?.locationName) setLocationName(cfg.locationName);
+
+        const settings = await DeviceSettingsService.getSettings();
+        setQrEnabled(settings.qrEnabled);
+        setPinEnabled(settings.pinEnabled);
+        setKioskLocked(settings.kioskLocked);
       } catch {}
     };
     loadConfig();
   }, []);
 
-  const handleToggleKioskLock = async (value: boolean) => {
+  const handleToggleKioskLock = (value: boolean) => {
     setKioskLocked(value);
-    await KioskService.setLocked(value);
+  };
+
+  const handleSaveSettings = async () => {
+    try {
+      await DeviceSettingsService.saveSettings({
+        qrEnabled,
+        pinEnabled,
+        kioskLocked,
+      });
+      await KioskService.setLocked(kioskLocked);
+      Alert.alert('Settings Saved', 'Device check-in options and kiosk security mode have been updated.');
+      setSettingsVisible(false);
+    } catch (err: any) {
+      Alert.alert('Error', err?.message || 'Failed to save settings.');
+    }
   };
 
   const handleManualCheckIn = (studentId: string) => {
@@ -344,6 +363,16 @@ export default function StaffDashboardScreen() {
                   />
                 </View>
               </View>
+
+              {/* Save Settings Button */}
+              <TouchableOpacity
+                style={styles.saveSettingsBtn}
+                onPress={handleSaveSettings}
+                activeOpacity={0.8}
+              >
+                <MaterialIcons name="save" size={20} color={Colors.textWhite} />
+                <Text style={styles.saveSettingsBtnText}>Save Settings</Text>
+              </TouchableOpacity>
 
               {/* Device Info */}
               <View style={styles.settingsCard}>
@@ -651,6 +680,25 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
     color: Colors.error,
+  },
+  saveSettingsBtn: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    alignItems: 'center',
+    height: 52,
+    borderRadius: 14,
+    backgroundColor: Colors.primary,
+    gap: 8,
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.2,
+    shadowRadius: 8,
+    elevation: 3,
+  },
+  saveSettingsBtnText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.textWhite,
   },
   emptySessionBox: {
     backgroundColor: Colors.cardBackground,

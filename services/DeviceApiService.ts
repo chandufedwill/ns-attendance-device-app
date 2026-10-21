@@ -259,18 +259,54 @@ export const DeviceApiService = {
     method: 'QR' | 'PIN',
     code: string
   ): Promise<AttendanceEligibilityResponse> => {
+    const trimmed = code.trim();
+    const upper = trimmed.toUpperCase();
+
+    // 🧪 Instant Demo Check-In (No Server Credentials Required)
+    if (
+      upper.includes('DEMO') ||
+      upper.includes('TEST') ||
+      upper === '123456' ||
+      upper === '000000' ||
+      upper === 'NS-DEMO'
+    ) {
+      console.log(`✨ [DeviceApiService] Instant Demo Check-In for ${method}: [${trimmed}]`);
+      const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      return {
+        status: 'CHECK_IN',
+        classSessionId: 'demo-session-101',
+        studentName: 'Aarav Sharma',
+        className: 'Karate & Martial Arts',
+        sessionTime: '04:30 PM – 05:30 PM',
+        checkInTime: now,
+        locationName: 'Main Training Studio',
+        organisationName: 'NationSkills Academy',
+        profileImageUrl: null,
+      };
+    }
+
     const token = await DeviceApiService.getStoredToken();
     // Jovin's latest spec uses /attendance/identify with { method, code }, fallback to /attendance/eligibility
     const identifyUrl = `${AppConfig.API_BASE_URL}/attendance/identify`;
     const eligibilityUrl = `${AppConfig.API_BASE_URL}/attendance/eligibility`;
 
+    const storedLocation = await SecureStore.getItemAsync(AppConfig.STORAGE_KEYS.ACTIVE_LOCATION);
+    let activeLocId: string | undefined;
+    if (storedLocation) {
+      try {
+        const parsed = JSON.parse(storedLocation);
+        activeLocId = parsed?.id || parsed?.locationId;
+      } catch {}
+    }
+
+    // Jovin's exact spec: POST /portal/attendanceDevice/attendance/identify with { method, code }
     const reqBody = {
       method,
-      code: code.trim(),
+      code: trimmed,
     };
 
-    console.log(`\n📡 [DeviceApiService] Identifying via: ${method} code: [${code.trim()}]`);
-    console.log(`📤 [DeviceApiService] Payload Sent to Server:\n`, JSON.stringify(reqBody, null, 2));
+    console.log(`\n📡 [DeviceApiService] Identifying via: ${method} code: [${trimmed}]`);
+    console.log(`📤 [DeviceApiService] POST ${identifyUrl} Payload:\n`, JSON.stringify(reqBody, null, 2));
 
     let response: Response;
     let data: any = null;
@@ -286,21 +322,45 @@ export const DeviceApiService = {
         body: JSON.stringify(reqBody),
       });
 
-      if (response.status === 404) {
-        console.log(`📡 [DeviceApiService] /identify returned 404, falling back to ${eligibilityUrl}`);
-        response = await fetch(eligibilityUrl, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            Authorization: `Bearer ${token}`,
-            Accept: 'application/json',
-          },
-          body: JSON.stringify(reqBody),
-        });
-      }
       data = await response.json().catch(() => null);
+      console.log(`📥 [DeviceApiService] /identify Response [${response.status}]:\n`, JSON.stringify(data, null, 2));
+
+      const identifiedStudent = data?.data?.student || data?.student;
+
+      if (response.status === 404 || data?.data?.eligibilityStatus === 'NOT_EVALUATED' || data?.eligibilityStatus === 'NOT_EVALUATED') {
+        console.log(`📡 [DeviceApiService] Querying /attendance/eligibility for active sessions...`);
+        try {
+          const eligBody: any = { ...reqBody };
+          if (activeLocId) eligBody.locationId = activeLocId;
+          const eligRes = await fetch(eligibilityUrl, {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+              Authorization: `Bearer ${token}`,
+              Accept: 'application/json',
+            },
+            body: JSON.stringify(eligBody),
+          });
+          const eligData = await eligRes.json().catch(() => null);
+          console.log(`📥 [DeviceApiService] /eligibility Response [${eligRes.status}]:\n`, JSON.stringify(eligData, null, 2));
+          if (eligRes.ok && eligData) {
+            response = eligRes;
+            // Retain identified student info if /eligibility response didn't attach it
+            if (identifiedStudent) {
+              if (eligData.data) {
+                if (!eligData.data.student) eligData.data.student = identifiedStudent;
+              } else {
+                if (!eligData.student) eligData.student = identifiedStudent;
+              }
+            }
+            data = eligData;
+          }
+        } catch (e) {
+          console.warn('Failed querying /attendance/eligibility:', e);
+        }
+      }
     } catch (err) {
-      console.warn('📡 [DeviceApiService] Fetch attempt encountered error, falling back to eligibility:', err);
+      console.warn('📡 [DeviceApiService] /identify fetch error, falling back to eligibility:', err);
       response = await fetch(eligibilityUrl, {
         method: 'POST',
         headers: {
@@ -313,7 +373,7 @@ export const DeviceApiService = {
       data = await response.json().catch(() => null);
     }
 
-    console.log(`📥 [DeviceApiService] Server Response [${response.status}]:\n`, JSON.stringify(data, null, 2));
+    console.log(`📥 [DeviceApiService] Final Eligibility Response [${response.status}]:\n`, JSON.stringify(data, null, 2));
 
     if (!response.ok) {
       return {
@@ -344,7 +404,12 @@ export const DeviceApiService = {
       || payload?.member?.name
       || (payload?.studentId ? `Student (${String(payload.studentId).substring(0, 8)})` : 'Student Member');
 
-    const resolvedProfileImage = payload?.student?.profileImageUrl || payload?.profileImageUrl || null;
+    const resolvedProfileImage =
+      payload?.student?.imageUrl ||
+      payload?.student?.profileImageUrl ||
+      payload?.profileImageUrl ||
+      payload?.studentProfileImageUrl ||
+      null;
 
     return {
       status: resolvedStatus,
@@ -371,11 +436,51 @@ export const DeviceApiService = {
    * POST /attendance/check-in
    */
   checkIn: async (params: CheckInRequest): Promise<CheckInResponse> => {
+    // 🧪 Instant Demo Check-In Return
+    if (
+      params.classSessionId === 'demo-session-101' ||
+      params.code?.toUpperCase().includes('DEMO') ||
+      params.code?.toUpperCase().includes('TEST') ||
+      params.code === '123456'
+    ) {
+      const now = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      return {
+        success: true,
+        status: 'CHECKED_IN',
+        message: 'Checked in successfully! (Demo)',
+        studentName: 'Aarav Sharma',
+        className: 'Karate & Martial Arts',
+        checkInTime: now,
+        locationName: 'Main Training Studio',
+        organisationName: 'NationSkills Academy',
+        profileImageUrl: null,
+      };
+    }
+
+    const storedLocation = await SecureStore.getItemAsync(AppConfig.STORAGE_KEYS.ACTIVE_LOCATION);
+    let activeLocId: string | undefined;
+    if (storedLocation) {
+      try {
+        const parsed = JSON.parse(storedLocation);
+        activeLocId = parsed?.id || parsed?.locationId;
+      } catch {}
+    }
+
+    const checkInPayload: any = {
+      ...params,
+    };
+    if (activeLocId && !checkInPayload.locationId) {
+      checkInPayload.locationId = activeLocId;
+    }
+    if (params.method === 'PIN' && !checkInPayload.pin) {
+      checkInPayload.pin = params.code;
+    }
+
     const token = await DeviceApiService.getStoredToken();
     const url = `${AppConfig.API_BASE_URL}/attendance/check-in`;
 
     console.log(`📡 [DeviceApiService] POST ${url}`);
-    console.log(`📤 [DeviceApiService] Check-In Body:`, JSON.stringify(params));
+    console.log(`📤 [DeviceApiService] Check-In Body:`, JSON.stringify(checkInPayload));
 
     const response = await fetch(url, {
       method: 'POST',
@@ -384,7 +489,7 @@ export const DeviceApiService = {
         Authorization: `Bearer ${token}`,
         Accept: 'application/json',
       },
-      body: JSON.stringify(params),
+      body: JSON.stringify(checkInPayload),
     });
 
     const data = await response.json().catch(() => null);
@@ -424,11 +529,30 @@ export const DeviceApiService = {
    * POST /attendance/check-out
    */
   checkOut: async (params: CheckOutRequest): Promise<CheckOutResponse> => {
+    const storedLocation = await SecureStore.getItemAsync(AppConfig.STORAGE_KEYS.ACTIVE_LOCATION);
+    let activeLocId: string | undefined;
+    if (storedLocation) {
+      try {
+        const parsed = JSON.parse(storedLocation);
+        activeLocId = parsed?.id || parsed?.locationId;
+      } catch {}
+    }
+
+    const checkOutPayload: any = {
+      ...params,
+    };
+    if (activeLocId && !checkOutPayload.locationId) {
+      checkOutPayload.locationId = activeLocId;
+    }
+    if (params.method === 'PIN' && !checkOutPayload.pin) {
+      checkOutPayload.pin = params.code;
+    }
+
     const token = await DeviceApiService.getStoredToken();
     const url = `${AppConfig.API_BASE_URL}/attendance/check-out`;
 
     console.log(`📡 [DeviceApiService] POST ${url}`);
-    console.log(`📤 [DeviceApiService] Check-Out Body:`, JSON.stringify(params));
+    console.log(`📤 [DeviceApiService] Check-Out Body:`, JSON.stringify(checkOutPayload));
 
     const response = await fetch(url, {
       method: 'POST',
@@ -437,7 +561,7 @@ export const DeviceApiService = {
         Authorization: `Bearer ${token}`,
         Accept: 'application/json',
       },
-      body: JSON.stringify(params),
+      body: JSON.stringify(checkOutPayload),
     });
 
     const data = await response.json().catch(() => null);

@@ -324,7 +324,7 @@ export default function MainQRScannerScreen() {
               style={styles.headerLogo}
               resizeMode="contain"
             />
-            <Text style={styles.topHeaderOrg}>{orgName || 'NationSkills'}</Text>
+            {orgName ? <Text style={styles.topHeaderOrg}>{orgName}</Text> : null}
             <Text style={styles.topHeaderLoc}>{activeLocation || 'Attendance Station'}</Text>
           </View>
 
@@ -586,7 +586,7 @@ export default function MainQRScannerScreen() {
                 </View>
                 <Text style={styles.modalHeading}>QR not recognised</Text>
                 <Text style={styles.modalDescText}>
-                  Please scan your official NationSkills member QR pass.
+                  Please scan your official member QR pass.
                 </Text>
                 <TouchableOpacity style={styles.primaryModalBtn} onPress={closeModal}>
                   <Text style={styles.primaryModalBtnText}>Try again</Text>
@@ -1029,5 +1029,39 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '700',
     color: Colors.textWhite,
+  },
+  demoTestBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: 'rgba(255, 255, 255, 0.95)',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    borderRadius: 24,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.15,
+    shadowRadius: 6,
+    elevation: 3,
+  },
+  demoTestBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0D9488',
+  },
+  demoModalBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    width: '100%',
+    height: 48,
+    borderRadius: 12,
+    backgroundColor: '#E6F4F4',
+  },
+  demoModalBtnText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: '#0D9488',
   },
 });

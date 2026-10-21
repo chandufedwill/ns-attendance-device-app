@@ -37,8 +37,8 @@ export interface AttendanceLocation {
 
 export interface LocationSwitchRequest {
   locationId: string;
-  userId: string;
-  pin: string;
+  userId?: string;
+  pin?: string;
 }
 
 export interface ClassSessionSummary {

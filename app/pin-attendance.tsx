@@ -112,7 +112,17 @@ export default function PinAttendanceScreen() {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
           SoundService.playError();
         } catch {}
-        setErrorMessage(eligibility.message || 'Invalid PIN or no eligible active session.');
+
+        let msg = eligibility.message || 'Invalid PIN or no eligible active session.';
+        if (eligibility.status === 'NO_SESSION' && eligibility.studentName) {
+          msg = `Hi ${eligibility.studentName}, no active sessions scheduled right now.`;
+        } else if (eligibility.status === 'ALREADY_CHECKED_IN') {
+          msg = `Already checked in for ${eligibility.className || 'this session'}.`;
+        } else if (eligibility.status === 'ALREADY_ATTENDED') {
+          msg = `Attendance already completed for ${eligibility.className || 'today'}.`;
+        }
+
+        setErrorMessage(msg);
         setPin('');
       }
     } catch (err: any) {
@@ -160,7 +170,7 @@ export default function PinAttendanceScreen() {
 
         {/* Location & Context Subtitle */}
         <View style={styles.subHeaderBox}>
-          <Text style={styles.subHeaderOrg}>{orgName || 'NationSkills'}</Text>
+          {orgName ? <Text style={styles.subHeaderOrg}>{orgName}</Text> : null}
           <Text style={styles.subHeaderLoc}>
             {activeLocation ? `${activeLocation} • PIN Attendance` : 'PIN Attendance'}
           </Text>
@@ -396,5 +406,33 @@ const styles = StyleSheet.create({
     fontSize: 13,
     fontWeight: '600',
     color: '#334155',
+  },
+  bottomActionsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    marginTop: 'auto',
+    marginBottom: 8,
+  },
+  demoPinPillBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
+    backgroundColor: '#E6F4F4',
+    borderWidth: 1,
+    borderColor: '#99F6E4',
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    borderRadius: 20,
+    shadowColor: '#000000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+    elevation: 1,
+  },
+  demoPinPillBtnText: {
+    fontSize: 13,
+    fontWeight: '700',
+    color: '#0D9488',
   },
 });

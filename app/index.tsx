@@ -29,10 +29,11 @@ export default function DeviceSetupScreen() {
   useEffect(() => {
     const checkActivation = async () => {
       try {
-        // Auto-seed Jovin's Sargam Dance & Coventry Binley credentials directly
-        await DeviceApiService.seedDemoCredentials();
-        router.replace('/attendance-home' as any);
-        return;
+        const token = await DeviceApiService.getStoredToken();
+        if (token) {
+          router.replace('/attendance-home' as any);
+          return;
+        }
       } catch (err) {
         console.warn('Initial token check error:', err);
       } finally {
@@ -44,17 +45,29 @@ export default function DeviceSetupScreen() {
   }, []);
 
   const handleConnectDevice = async () => {
+    if (!setupCode.trim()) {
+      Alert.alert('Activation Code Required', 'Please enter the 6-character setup code.');
+      return;
+    }
+
     setLoading(true);
     try {
-      const result = await DeviceApiService.activateDevice(setupCode.trim()).catch(() => null);
-      if (!result) {
-        await DeviceApiService.seedDemoCredentials();
-      }
-      router.replace('/attendance-home' as any);
+      const result = await DeviceApiService.activateDevice(setupCode.trim());
+      console.log('✅ Device Activated:', result);
+
+      router.replace({
+        pathname: '/setup-success' as any,
+        params: {
+          deviceName: deviceName.trim() || result.deviceName,
+          organisationName: result.organisationName,
+        },
+      });
     } catch (error: any) {
-      console.warn('Device activation fallback:', error);
-      await DeviceApiService.seedDemoCredentials();
-      router.replace('/attendance-home' as any);
+      console.error('Device activation error:', error);
+      Alert.alert(
+        'Activation Failed',
+        error?.message || 'Could not verify activation code with server. Please check the code and try again.'
+      );
     } finally {
       setLoading(false);
     }

@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   StyleSheet,
   View,
@@ -40,6 +40,25 @@ export default function PinAttendanceScreen() {
   const [activeLocation, setActiveLocation] = useState('');
   const [successData, setSuccessData] = useState<SuccessState | null>(null);
 
+  // Inactivity / Idle return timer (25s grace period as requested by Jovin)
+  const idleTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  const handleReturnToReady = useCallback(() => {
+    if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+    setPin('');
+    setErrorMessage('');
+    setSuccessData(null);
+    router.replace('/attendance-home' as any);
+  }, [router]);
+
+  const resetIdleTimer = useCallback(() => {
+    if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+    idleTimerRef.current = setTimeout(() => {
+      console.log('⏱️ [PIN Attendance] Inactivity timeout (30s) reached. Returning to Home.');
+      handleReturnToReady();
+    }, 30000);
+  }, [handleReturnToReady]);
+
   useEffect(() => {
     const loadMetadata = async () => {
       try {
@@ -55,9 +74,15 @@ export default function PinAttendanceScreen() {
       } catch {}
     };
     loadMetadata();
-  }, []);
+    resetIdleTimer();
+
+    return () => {
+      if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+    };
+  }, [resetIdleTimer]);
 
   const handleKeyPress = (num: string) => {
+    resetIdleTimer();
     if (pin.length < 6) {
       const newPin = pin + num;
       setPin(newPin);
@@ -73,6 +98,7 @@ export default function PinAttendanceScreen() {
   };
 
   const handleBackspace = () => {
+    resetIdleTimer();
     if (pin.length > 0) {
       setPin(pin.slice(0, -1));
       setErrorMessage('');
@@ -83,6 +109,7 @@ export default function PinAttendanceScreen() {
   };
 
   const submitPin = async (completedPin: string) => {
+    if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
     setProcessing(true);
     try {
       console.log(`\n🔑 [PIN Attendance] Identifying via PIN: [${completedPin}]`);
@@ -142,11 +169,6 @@ export default function PinAttendanceScreen() {
     }
   };
 
-  const handleReturnToReady = () => {
-    setSuccessData(null);
-    router.replace('/attendance-home' as any);
-  };
-
   // If check-in successful, show Screen 3 CheckInSuccessView
   if (successData) {
     return (
@@ -174,103 +196,106 @@ export default function PinAttendanceScreen() {
           onBack={handleReturnToReady}
         />
 
-        {/* Location & Context Subtitle */}
-        <View style={[styles.subHeaderBox, isTablet && styles.subHeaderBoxTablet]}>
-          {orgName ? <Text style={[styles.subHeaderOrg, isTablet && styles.subHeaderOrgTablet]}>{orgName}</Text> : null}
-          <Text style={[styles.subHeaderLoc, isTablet && styles.subHeaderLocTablet]}>
-            {activeLocation ? `${activeLocation} • PIN Attendance` : 'PIN Attendance'}
-          </Text>
-        </View>
-
-        {/* 6-dot indicator */}
-        <View style={[styles.dotsRow, isTablet && styles.dotsRowTablet]}>
-          {[0, 1, 2, 3, 4, 5].map((index) => {
-            const isFilled = index < pin.length;
-            return (
-              <View
-                key={index}
-                style={[styles.dot, isTablet && styles.dotTablet, isFilled && styles.dotFilled]}
-              />
-            );
-          })}
-        </View>
-
-        {errorMessage ? (
-          <Text style={[styles.errorText, isTablet && styles.errorTextTablet]}>{errorMessage}</Text>
-        ) : processing ? (
-          <View style={styles.loaderRow}>
-            <ActivityIndicator size="small" color={Colors.primary} />
-            <Text style={[styles.verifyingText, isTablet && styles.verifyingTextTablet]}>Verifying PIN...</Text>
+        {/* Center Content Area: Vertically centers naturally on tall tablet screens */}
+        <View style={[styles.keypadBodyWrapper, isTablet && styles.keypadBodyWrapperTablet]}>
+          {/* Location & Context Subtitle */}
+          <View style={[styles.subHeaderBox, isTablet && styles.subHeaderBoxTablet]}>
+            {orgName ? <Text style={[styles.subHeaderOrg, isTablet && styles.subHeaderOrgTablet]}>{orgName}</Text> : null}
+            <Text style={[styles.subHeaderLoc, isTablet && styles.subHeaderLocTablet]}>
+              {activeLocation ? `${activeLocation} • PIN Attendance` : 'PIN Attendance'}
+            </Text>
           </View>
-        ) : (
-          <Text style={[styles.subText, isTablet && styles.subTextTablet]}>Enter your 6-digit student membership PIN</Text>
-        )}
 
-        {/* Numeric Dialpad */}
-        <View style={[styles.dialpad, isTablet && styles.dialpadTablet]}>
-          {[['1', '2', '3'], ['4', '5', '6'], ['7', '8', '9']].map((row, rIdx) => (
-            <View key={rIdx} style={[styles.dialpadRow, isTablet && styles.dialpadRowTablet]}>
-              {row.map((digit) => (
-                <TouchableOpacity
-                  key={digit}
-                  style={[styles.keyBtn, isTablet && styles.keyBtnTablet]}
-                  onPress={() => handleKeyPress(digit)}
-                  disabled={processing}
-                  activeOpacity={0.7}
-                >
-                  <Text style={[styles.keyText, isTablet && styles.keyTextTablet]}>{digit}</Text>
-                </TouchableOpacity>
-              ))}
+          {/* 6-dot indicator */}
+          <View style={[styles.dotsRow, isTablet && styles.dotsRowTablet]}>
+            {[0, 1, 2, 3, 4, 5].map((index) => {
+              const isFilled = index < pin.length;
+              return (
+                <View
+                  key={index}
+                  style={[styles.dot, isTablet && styles.dotTablet, isFilled && styles.dotFilled]}
+                />
+              );
+            })}
+          </View>
+
+          {errorMessage ? (
+            <Text style={[styles.errorText, isTablet && styles.errorTextTablet]}>{errorMessage}</Text>
+          ) : processing ? (
+            <View style={styles.loaderRow}>
+              <ActivityIndicator size="small" color={Colors.primary} />
+              <Text style={[styles.verifyingText, isTablet && styles.verifyingTextTablet]}>Verifying PIN...</Text>
             </View>
-          ))}
+          ) : (
+            <Text style={[styles.subText, isTablet && styles.subTextTablet]}>Enter your 6-digit student membership PIN</Text>
+          )}
 
-          {/* Bottom Dialpad Row */}
-          <View style={[styles.dialpadRow, isTablet && styles.dialpadRowTablet]}>
-            <TouchableOpacity
-              style={[styles.keyBtnSecondary, isTablet && styles.keyBtnSecondaryTablet]}
-              onPress={() => {
-                setPin('');
-                setErrorMessage('');
-              }}
-              disabled={processing || pin.length === 0}
-              activeOpacity={0.7}
-            >
-              <Text style={[styles.keyTextSecondary, isTablet && styles.keyTextSecondaryTablet]}>Clear</Text>
-            </TouchableOpacity>
+          {/* Numeric Dialpad */}
+          <View style={[styles.dialpad, isTablet && styles.dialpadTablet]}>
+            {[['1', '2', '3'], ['4', '5', '6'], ['7', '8', '9']].map((row, rIdx) => (
+              <View key={rIdx} style={[styles.dialpadRow, isTablet && styles.dialpadRowTablet]}>
+                {row.map((digit) => (
+                  <TouchableOpacity
+                    key={digit}
+                    style={[styles.keyBtn, isTablet && styles.keyBtnTablet]}
+                    onPress={() => handleKeyPress(digit)}
+                    disabled={processing}
+                    activeOpacity={0.7}
+                  >
+                    <Text style={[styles.keyText, isTablet && styles.keyTextTablet]}>{digit}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            ))}
 
-            <TouchableOpacity
-              style={[styles.keyBtn, isTablet && styles.keyBtnTablet]}
-              onPress={() => handleKeyPress('0')}
-              disabled={processing}
-              activeOpacity={0.7}
-            >
-              <Text style={[styles.keyText, isTablet && styles.keyTextTablet]}>0</Text>
-            </TouchableOpacity>
+            {/* Bottom Dialpad Row */}
+            <View style={[styles.dialpadRow, isTablet && styles.dialpadRowTablet]}>
+              <TouchableOpacity
+                style={[styles.keyBtnSecondary, isTablet && styles.keyBtnSecondaryTablet]}
+                onPress={() => {
+                  setPin('');
+                  setErrorMessage('');
+                }}
+                disabled={processing || pin.length === 0}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.keyTextSecondary, isTablet && styles.keyTextSecondaryTablet]}>Clear</Text>
+              </TouchableOpacity>
 
-            <TouchableOpacity
-              style={[styles.keyBtnSecondary, isTablet && styles.keyBtnSecondaryTablet]}
-              onPress={handleBackspace}
-              disabled={processing || pin.length === 0}
-              activeOpacity={0.7}
-            >
-              <MaterialIcons
-                name="backspace"
-                size={isTablet ? 28 : 22}
-                color={pin.length > 0 ? Colors.text : Colors.textMuted}
-              />
-            </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.keyBtn, isTablet && styles.keyBtnTablet]}
+                onPress={() => handleKeyPress('0')}
+                disabled={processing}
+                activeOpacity={0.7}
+              >
+                <Text style={[styles.keyText, isTablet && styles.keyTextTablet]}>0</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={[styles.keyBtnSecondary, isTablet && styles.keyBtnSecondaryTablet]}
+                onPress={handleBackspace}
+                disabled={processing || pin.length === 0}
+                activeOpacity={0.7}
+              >
+                <MaterialIcons
+                  name="backspace"
+                  size={isTablet ? 30 : 22}
+                  color={pin.length > 0 ? Colors.text : Colors.textMuted}
+                />
+              </TouchableOpacity>
+            </View>
           </View>
-        </View>
 
-        {/* Cancel Button */}
-        <TouchableOpacity
-          style={[styles.cancelPillBtn, isTablet && styles.cancelPillBtnTablet]}
-          onPress={handleReturnToReady}
-          activeOpacity={0.8}
-        >
-          <MaterialIcons name="close" size={isTablet ? 22 : 18} color="#64748B" />
-          <Text style={[styles.cancelPillBtnText, isTablet && styles.cancelPillBtnTextTablet]}>Cancel</Text>
-        </TouchableOpacity>
+          {/* Cancel Button */}
+          <TouchableOpacity
+            style={[styles.cancelPillBtn, isTablet && styles.cancelPillBtnTablet]}
+            onPress={handleReturnToReady}
+            activeOpacity={0.8}
+          >
+            <MaterialIcons name="close" size={isTablet ? 22 : 18} color="#64748B" />
+            <Text style={[styles.cancelPillBtnText, isTablet && styles.cancelPillBtnTextTablet]}>Cancel</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     </SafeAreaView>
   );
@@ -289,6 +314,15 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 20,
     paddingBottom: 24,
+  },
+  keypadBodyWrapper: {
+    flex: 1,
+    width: '100%',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  keypadBodyWrapperTablet: {
+    paddingVertical: 12,
   },
   subHeaderBox: {
     alignItems: 'center',
@@ -479,33 +513,34 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   dialpadTablet: {
-    maxWidth: 480,
-    gap: 16,
-    marginBottom: 36,
+    maxWidth: 540,
+    gap: 18,
+    marginBottom: 28,
   },
   dialpadRowTablet: {
-    gap: 16,
+    gap: 18,
   },
   keyBtnTablet: {
-    height: 84,
-    borderRadius: 22,
+    height: 94,
+    borderRadius: 24,
   },
   keyTextTablet: {
-    fontSize: 34,
+    fontSize: 38,
   },
   keyBtnSecondaryTablet: {
-    height: 84,
-    borderRadius: 22,
+    height: 94,
+    borderRadius: 24,
   },
   keyTextSecondaryTablet: {
-    fontSize: 18,
+    fontSize: 20,
   },
   cancelPillBtnTablet: {
-    paddingHorizontal: 32,
-    paddingVertical: 14,
-    borderRadius: 28,
+    paddingHorizontal: 40,
+    paddingVertical: 16,
+    borderRadius: 30,
+    marginTop: 8,
   },
   cancelPillBtnTextTablet: {
-    fontSize: 16,
+    fontSize: 18,
   },
 });

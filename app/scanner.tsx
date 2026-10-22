@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   StyleSheet,
   View,
@@ -75,6 +75,9 @@ export default function MainQRScannerScreen() {
   const lastScanTimestampRef = useRef(0);
   const autoCloseTimerRef = useRef<NodeJS.Timeout | null>(null);
 
+  // Inactivity / Idle Timer: auto-return to Home screen if idle for 25s without scanning
+  const idleTimerRef = useRef<NodeJS.Timeout | null>(null);
+
   // Result modal state
   const lastScannedCodeRef = useRef<string>('');
   const [modalVisible, setModalVisible] = useState(false);
@@ -83,6 +86,25 @@ export default function MainQRScannerScreen() {
 
   // Auto-close progress animation
   const progressAnim = useRef(new Animated.Value(0)).current;
+
+  const handleReturnToHome = useCallback(() => {
+    if (autoCloseTimerRef.current) clearTimeout(autoCloseTimerRef.current);
+    if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+    setModalVisible(false);
+    setModalResult(null);
+    setCheckoutInProgress(false);
+    isProcessingRef.current = false;
+    setIsScanning(false);
+    router.replace('/attendance-home' as any);
+  }, [router]);
+
+  const resetIdleTimer = useCallback(() => {
+    if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+    idleTimerRef.current = setTimeout(() => {
+      console.log('⏱️ [Scanner] Inactivity timeout (30s) reached. Returning to Home.');
+      handleReturnToHome();
+    }, 30000);
+  }, [handleReturnToHome]);
 
   useEffect(() => {
     const loadMetadata = async () => {
@@ -101,21 +123,13 @@ export default function MainQRScannerScreen() {
     };
     loadMetadata();
     KioskService.init();
+    resetIdleTimer();
 
     return () => {
       if (autoCloseTimerRef.current) clearTimeout(autoCloseTimerRef.current);
+      if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
     };
-  }, []);
-
-  const handleReturnToHome = () => {
-    if (autoCloseTimerRef.current) clearTimeout(autoCloseTimerRef.current);
-    setModalVisible(false);
-    setModalResult(null);
-    setCheckoutInProgress(false);
-    isProcessingRef.current = false;
-    setIsScanning(false);
-    router.replace('/attendance-home' as any);
-  };
+  }, [resetIdleTimer]);
 
   const triggerAutoClose = (durationMs = 3500, returnToHome = true) => {
     if (autoCloseTimerRef.current) clearTimeout(autoCloseTimerRef.current);
@@ -142,6 +156,7 @@ export default function MainQRScannerScreen() {
     setCheckoutInProgress(false);
     isProcessingRef.current = false;
     setIsScanning(false);
+    resetIdleTimer();
   };
 
   const handleBarcodeScanned = async ({ data }: { data: string }) => {
@@ -151,6 +166,7 @@ export default function MainQRScannerScreen() {
       return;
     }
 
+    if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
     lastScanTimestampRef.current = now;
     isProcessingRef.current = true;
     setIsScanning(true);

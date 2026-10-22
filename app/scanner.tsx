@@ -107,9 +107,18 @@ export default function MainQRScannerScreen() {
     };
   }, []);
 
-  const triggerAutoClose = (durationMs = 2800) => {
+  const handleReturnToHome = () => {
     if (autoCloseTimerRef.current) clearTimeout(autoCloseTimerRef.current);
+    setModalVisible(false);
+    setModalResult(null);
+    setCheckoutInProgress(false);
+    isProcessingRef.current = false;
+    setIsScanning(false);
+    router.replace('/attendance-home' as any);
+  };
 
+  const triggerAutoClose = (durationMs = 3500, returnToHome = true) => {
+    if (autoCloseTimerRef.current) clearTimeout(autoCloseTimerRef.current);
     progressAnim.setValue(0);
     Animated.timing(progressAnim, {
       toValue: 1,
@@ -118,7 +127,11 @@ export default function MainQRScannerScreen() {
     }).start();
 
     autoCloseTimerRef.current = setTimeout(() => {
-      closeModal();
+      if (returnToHome) {
+        handleReturnToHome();
+      } else {
+        closeModal();
+      }
     }, durationMs);
   };
 
@@ -185,7 +198,7 @@ export default function MainQRScannerScreen() {
           checkInTime: checkInRes.checkInTime || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         });
         setModalVisible(true);
-        triggerAutoClose(2800);
+        triggerAutoClose(3500, true);
       } else {
         // Render other states (Already checked in, already attended, too early, closed, invalid)
         setModalResult(eligibility);
@@ -202,13 +215,13 @@ export default function MainQRScannerScreen() {
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
             SoundService.playWarning();
           } catch {}
-          triggerAutoClose(3500);
+          triggerAutoClose(3500, false);
         } else if (eligibility.status === 'TOO_EARLY' || eligibility.status === 'CHECKIN_CLOSED') {
           try {
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
             SoundService.playWarning();
           } catch {}
-          triggerAutoClose(3000);
+          triggerAutoClose(3500, false);
         } else {
           try {
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
@@ -257,7 +270,7 @@ export default function MainQRScannerScreen() {
         status: 'CHECK_OUT',
         checkOutTime: checkOutRes.checkOutTime || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
       });
-      triggerAutoClose(2800);
+      triggerAutoClose(3500, true);
     } catch (err: any) {
       try {
         SoundService.playError();
@@ -377,7 +390,7 @@ export default function MainQRScannerScreen() {
       {/* ======================================================== */}
       {/* RESULT MODALS (Screen 3 Check-In Success & Statuses)     */}
       {/* ======================================================== */}
-      <Modal visible={modalVisible} transparent={modalResult?.status !== 'CHECK_IN'} animationType="fade" onRequestClose={closeModal}>
+      <Modal visible={modalVisible} transparent={modalResult?.status !== 'CHECK_IN'} animationType="fade" onRequestClose={handleReturnToHome}>
         {modalResult?.status === 'CHECK_IN' ? (
           <SafeAreaView style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
             <CheckInSuccessView
@@ -386,11 +399,8 @@ export default function MainQRScannerScreen() {
               className={modalResult.className || 'Class Session'}
               locationName={activeLocation || orgName || 'Attendance Station'}
               checkInTime={modalResult.checkInTime}
-              autoCloseDurationMs={2800}
-              onDismiss={() => {
-                closeModal();
-                router.replace('/attendance-home' as any);
-              }}
+              autoCloseDurationMs={3500}
+              onDismiss={handleReturnToHome}
             />
           </SafeAreaView>
         ) : (
@@ -421,10 +431,7 @@ export default function MainQRScannerScreen() {
 
                   <TouchableOpacity
                     style={styles.modalCloseBtn}
-                    onPress={() => {
-                      closeModal();
-                      router.replace('/attendance-home' as any);
-                    }}
+                    onPress={handleReturnToHome}
                   >
                     <Text style={styles.modalCloseBtnText}>Done</Text>
                   </TouchableOpacity>

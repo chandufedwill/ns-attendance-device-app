@@ -6,6 +6,7 @@ import {
   Image,
   Animated,
   TouchableOpacity,
+  useWindowDimensions,
 } from 'react-native';
 import { MaterialIcons } from '@expo/vector-icons';
 import { Colors } from '../constants/theme';
@@ -28,8 +29,11 @@ export function CheckInSuccessView({
   locationName = 'Active Location',
   checkInTime,
   onDismiss,
-  autoCloseDurationMs = 2800,
+  autoCloseDurationMs = 3500,
 }: CheckInSuccessViewProps) {
+  const { width: screenWidth, height: screenHeight } = useWindowDimensions();
+  const isTablet = Math.min(screenWidth, screenHeight) >= 600 || screenWidth >= 600;
+
   const [imageFailed, setImageFailed] = React.useState(false);
   const scaleAnim = useRef(new Animated.Value(0.7)).current;
   const opacityAnim = useRef(new Animated.Value(0)).current;
@@ -119,77 +123,77 @@ export function CheckInSuccessView({
             <View style={[styles.sparkleDiamond, { top: -10, right: 28 }]} />
             <View style={[styles.sparkleDiamond, { bottom: 0, left: 10 }]} />
 
-            <View style={styles.bigCheckCircle}>
-              <MaterialIcons name="check" size={44} color="#FFFFFF" />
+            <View style={[styles.bigCheckCircle, isTablet && styles.bigCheckCircleTablet]}>
+              <MaterialIcons name="check" size={isTablet ? 56 : 44} color="#FFFFFF" />
             </View>
           </View>
 
-          <Text style={styles.mainTitle}>Checked in successfully!</Text>
+          <Text style={[styles.mainTitle, isTablet && styles.mainTitleTablet]}>Checked in successfully!</Text>
         </View>
 
         {/* Member Card */}
-        <View style={styles.memberCard}>
+        <View style={[styles.memberCard, isTablet && styles.memberCardTablet]}>
           {/* Profile Photo / Avatar */}
           <View style={styles.avatarContainer}>
             {profileImageUrl && !imageFailed ? (
               <Image
                 source={{ uri: profileImageUrl }}
-                style={styles.avatarImage}
+                style={[styles.avatarImage, isTablet && styles.avatarImageTablet]}
                 onError={() => setImageFailed(true)}
               />
             ) : (
-              <View style={styles.avatarFallback}>
+              <View style={[styles.avatarFallback, isTablet && styles.avatarFallbackTablet]}>
                 {initials ? (
-                  <Text style={styles.avatarInitials}>{initials}</Text>
+                  <Text style={[styles.avatarInitials, isTablet && styles.avatarInitialsTablet]}>{initials}</Text>
                 ) : (
-                  <MaterialIcons name="person" size={38} color={Colors.primary} />
+                  <MaterialIcons name="person" size={isTablet ? 48 : 38} color={Colors.primary} />
                 )}
               </View>
             )}
           </View>
 
           {/* Student Name & Class */}
-          <Text style={styles.studentNameText} numberOfLines={1}>
+          <Text style={[styles.studentNameText, isTablet && styles.studentNameTextTablet]} numberOfLines={1}>
             {studentName}
           </Text>
-          <Text style={styles.classNameText} numberOfLines={1}>
+          <Text style={[styles.classNameText, isTablet && styles.classNameTextTablet]} numberOfLines={1}>
             {className}
           </Text>
 
           {/* Date & Time Row Card */}
-          <View style={styles.detailRowCard}>
-            <View style={styles.iconCircle}>
-              <MaterialIcons name="calendar-today" size={18} color="#0F766E" />
+          <View style={[styles.detailRowCard, isTablet && styles.detailRowCardTablet]}>
+            <View style={[styles.iconCircle, isTablet && styles.iconCircleTablet]}>
+              <MaterialIcons name="calendar-today" size={isTablet ? 22 : 18} color="#0F766E" />
             </View>
             <View style={styles.detailTextCol}>
-              <Text style={styles.detailLabel}>Date & Time</Text>
-              <Text style={styles.detailValue} numberOfLines={1}>
+              <Text style={[styles.detailLabel, isTablet && styles.detailLabelTablet]}>Date & Time</Text>
+              <Text style={[styles.detailValue, isTablet && styles.detailValueTablet]} numberOfLines={1}>
                 {dateFormatted}
               </Text>
             </View>
           </View>
 
           {/* Location Row Card */}
-          <View style={styles.detailRowCard}>
-            <View style={styles.iconCircle}>
-              <MaterialIcons name="location-on" size={20} color="#0F766E" />
+          <View style={[styles.detailRowCard, isTablet && styles.detailRowCardTablet]}>
+            <View style={[styles.iconCircle, isTablet && styles.iconCircleTablet]}>
+              <MaterialIcons name="location-on" size={isTablet ? 24 : 20} color="#0F766E" />
             </View>
             <View style={styles.detailTextCol}>
-              <Text style={styles.detailLabel}>Location</Text>
-              <Text style={styles.detailValue} numberOfLines={1}>
+              <Text style={[styles.detailLabel, isTablet && styles.detailLabelTablet]}>Location</Text>
+              <Text style={[styles.detailValue, isTablet && styles.detailValueTablet]} numberOfLines={1}>
                 {locationName}
               </Text>
             </View>
           </View>
 
           {/* Bottom Green Status Pill */}
-          <View style={styles.recordedBanner}>
-            <View style={styles.recordedCheckCircle}>
-              <MaterialIcons name="check" size={16} color="#FFFFFF" />
+          <View style={[styles.recordedBanner, isTablet && styles.recordedBannerTablet]}>
+            <View style={[styles.recordedCheckCircle, isTablet && styles.recordedCheckCircleTablet]}>
+              <MaterialIcons name="check" size={isTablet ? 20 : 16} color="#FFFFFF" />
             </View>
             <View style={{ flex: 1 }}>
-              <Text style={styles.recordedTitle}>Attendance recorded</Text>
-              <Text style={styles.recordedSubtitle}>Welcome, {firstName}!</Text>
+              <Text style={[styles.recordedTitle, isTablet && styles.recordedTitleTablet]}>Attendance recorded</Text>
+              <Text style={[styles.recordedSubtitle, isTablet && styles.recordedSubtitleTablet]}>Welcome, {firstName}!</Text>
             </View>
           </View>
         </View>
@@ -427,5 +431,69 @@ const styles = StyleSheet.create({
     height: '100%',
     backgroundColor: '#10B981',
     borderRadius: 2,
+  },
+  // Tablet scaling styles
+  memberCardTablet: {
+    maxWidth: 580,
+    padding: 30,
+    gap: 16,
+  },
+  mainTitleTablet: {
+    fontSize: 28,
+  },
+  bigCheckCircleTablet: {
+    width: 90,
+    height: 90,
+    borderRadius: 45,
+  },
+  avatarImageTablet: {
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+  },
+  avatarFallbackTablet: {
+    width: 110,
+    height: 110,
+    borderRadius: 55,
+  },
+  avatarInitialsTablet: {
+    fontSize: 38,
+  },
+  studentNameTextTablet: {
+    fontSize: 26,
+  },
+  classNameTextTablet: {
+    fontSize: 18,
+    marginTop: -6,
+  },
+  detailRowCardTablet: {
+    paddingHorizontal: 18,
+    paddingVertical: 16,
+  },
+  iconCircleTablet: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+  },
+  detailLabelTablet: {
+    fontSize: 13,
+  },
+  detailValueTablet: {
+    fontSize: 16,
+  },
+  recordedBannerTablet: {
+    paddingHorizontal: 18,
+    paddingVertical: 16,
+  },
+  recordedCheckCircleTablet: {
+    width: 34,
+    height: 34,
+    borderRadius: 17,
+  },
+  recordedTitleTablet: {
+    fontSize: 16,
+  },
+  recordedSubtitleTablet: {
+    fontSize: 14,
   },
 });

@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Image,
   Modal,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter, useLocalSearchParams } from 'expo-router';
@@ -33,6 +34,8 @@ const memoryCache = {
 
 export default function AttendanceHomeScreen() {
   const router = useRouter();
+  const { width, height } = useWindowDimensions();
+  const isTablet = Math.min(width, height) >= 600 || width >= 600;
   const params = useLocalSearchParams<{ locationName?: string }>();
   const [activeLocation, setActiveLocation] = useState(params.locationName || memoryCache.activeLocation || '');
   const [activeLocationId, setActiveLocationId] = useState<string>(memoryCache.activeLocationId || '');
@@ -186,7 +189,7 @@ export default function AttendanceHomeScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <View style={styles.container}>
+      <View style={[styles.container, isTablet && styles.tabletContainer]}>
         {/* Screen 1: Top Brand Header */}
         <KioskBrandHeader
           subtitle="Attendance Kiosk"
@@ -195,41 +198,42 @@ export default function AttendanceHomeScreen() {
         />
 
         <ScrollView
-          contentContainerStyle={styles.scrollBody}
+          contentContainerStyle={[styles.scrollBody, isTablet && styles.tabletScrollBody]}
           showsVerticalScrollIndicator={false}
         >
           {/* Organisation & Location Dropdown Card */}
           <TouchableOpacity
-            style={styles.orgCard}
+            style={[styles.orgCard, isTablet && styles.tabletOrgCard]}
             onPress={openLocationSelector}
             activeOpacity={0.8}
           >
             {/* Org Logo / Icon */}
-            <View style={styles.orgLogoBox}>
+            <View style={[styles.orgLogoBox, isTablet && styles.tabletOrgLogoBox]}>
               {orgLogoUrl && !logoFailed ? (
                 <Image
                   source={{ uri: orgLogoUrl }}
-                  style={styles.orgLogoImage}
+                  style={[styles.orgLogoImage, isTablet && styles.tabletOrgLogoImage]}
                   onError={() => setLogoFailed(true)}
                   resizeMode="contain"
                 />
               ) : (
-                <View style={styles.orgLogoFallback}>
-                  <MaterialIcons name="fitness-center" size={24} color="#BE185D" />
+                <View style={[styles.orgLogoFallback, isTablet && styles.tabletOrgLogoBox]}>
+                  <MaterialIcons name="fitness-center" size={isTablet ? 30 : 24} color="#BE185D" />
                 </View>
               )}
             </View>
 
             {/* Org Details */}
             <View style={styles.orgDetailsCol}>
-              <Text style={styles.orgNameText} numberOfLines={1}>
+              <Text style={[styles.orgNameText, isTablet && styles.tabletOrgNameText]} numberOfLines={1}>
                 {orgName || 'Partner Centre'}
               </Text>
               <View style={styles.orgLocationRow}>
-                <MaterialIcons name="location-on" size={15} color="#0D9488" />
+                <MaterialIcons name="location-on" size={isTablet ? 18 : 15} color="#0D9488" />
                 <Text
                   style={[
                     styles.orgLocationText,
+                    isTablet && styles.tabletOrgLocationText,
                     !activeLocation && styles.orgLocationPlaceholder,
                   ]}
                   numberOfLines={1}
@@ -239,62 +243,62 @@ export default function AttendanceHomeScreen() {
               </View>
             </View>
 
-            <View style={styles.dropdownBadge}>
-              <MaterialIcons name="keyboard-arrow-down" size={22} color={Colors.textSecondary} />
+            <View style={[styles.dropdownBadge, isTablet && styles.tabletDropdownBadge]}>
+              <MaterialIcons name="keyboard-arrow-down" size={isTablet ? 26 : 22} color={Colors.textSecondary} />
             </View>
           </TouchableOpacity>
 
           {/* Date Subtitle */}
-          <Text style={styles.dateLabel}>{todayFormatted}</Text>
+          <Text style={[styles.dateLabel, isTablet && styles.tabletDateLabel]}>{todayFormatted}</Text>
 
           {/* Ready For Attendance Heading Banner */}
-          <View style={styles.readyBanner}>
-            <View style={styles.readyIconCircle}>
-              <MaterialIcons name="groups" size={22} color="#0F766E" />
+          <View style={[styles.readyBanner, isTablet && styles.tabletReadyBanner]}>
+            <View style={[styles.readyIconCircle, isTablet && styles.tabletReadyIconCircle]}>
+              <MaterialIcons name="groups" size={isTablet ? 28 : 22} color="#0F766E" />
             </View>
             <View style={styles.readyTextCol}>
-              <Text style={styles.readyTitle}>Ready for Attendance</Text>
-              <Text style={styles.readySubtitle}>Choose how you want to check in</Text>
+              <Text style={[styles.readyTitle, isTablet && styles.tabletReadyTitle]}>Ready for Attendance</Text>
+              <Text style={[styles.readySubtitle, isTablet && styles.tabletReadySubtitle]}>Choose how you want to check in</Text>
             </View>
           </View>
 
           {/* Option 1: Scan QR Code (Conditional on qrEnabled) */}
           {qrEnabled && (
             <TouchableOpacity
-              style={styles.qrOptionCard}
+              style={[styles.qrOptionCard, isTablet && styles.tabletOptionCard]}
               onPress={() => router.push('/scanner' as any)}
               activeOpacity={0.85}
             >
-              <View style={styles.qrIconBox}>
-                <MaterialIcons name="qr-code-2" size={32} color="#FFFFFF" />
+              <View style={[styles.qrIconBox, isTablet && styles.tabletIconBox]}>
+                <MaterialIcons name="qr-code-2" size={isTablet ? 40 : 32} color="#FFFFFF" />
               </View>
               <View style={styles.optionTextCol}>
-                <Text style={styles.qrOptionTitle}>Scan QR Code</Text>
-                <Text style={styles.qrOptionSubtitle}>
+                <Text style={[styles.qrOptionTitle, isTablet && styles.tabletOptionTitle]}>Scan QR Code</Text>
+                <Text style={[styles.qrOptionSubtitle, isTablet && styles.tabletOptionSubtitle]}>
                   Scan your member QR code to mark attendance
                 </Text>
               </View>
-              <MaterialIcons name="chevron-right" size={26} color="#FFFFFF" />
+              <MaterialIcons name="chevron-right" size={isTablet ? 32 : 26} color="#FFFFFF" />
             </TouchableOpacity>
           )}
 
           {/* Option 2: Enter PIN (Conditional on pinEnabled) */}
           {pinEnabled && (
             <TouchableOpacity
-              style={styles.pinOptionCard}
+              style={[styles.pinOptionCard, isTablet && styles.tabletOptionCard]}
               onPress={() => router.push('/pin-attendance' as any)}
               activeOpacity={0.8}
             >
-              <View style={styles.pinIconBox}>
-                <MaterialIcons name="dialpad" size={26} color="#0D3838" />
+              <View style={[styles.pinIconBox, isTablet && styles.tabletIconBox]}>
+                <MaterialIcons name="dialpad" size={isTablet ? 34 : 26} color="#0D3838" />
               </View>
               <View style={styles.optionTextCol}>
-                <Text style={styles.pinOptionTitle}>Enter PIN</Text>
-                <Text style={styles.pinOptionSubtitle}>
+                <Text style={[styles.pinOptionTitle, isTablet && styles.tabletOptionTitle]}>Enter PIN</Text>
+                <Text style={[styles.pinOptionSubtitle, isTablet && styles.tabletOptionSubtitle]}>
                   Enter your 6-digit PIN to mark attendance
                 </Text>
               </View>
-              <MaterialIcons name="chevron-right" size={24} color={Colors.textSecondary} />
+              <MaterialIcons name="chevron-right" size={isTablet ? 30 : 24} color={Colors.textSecondary} />
             </TouchableOpacity>
           )}
 
@@ -853,5 +857,81 @@ const styles = StyleSheet.create({
   locationItemSub: {
     fontSize: 12,
     color: '#64748B',
+  },
+  tabletContainer: {
+    maxWidth: 680,
+    paddingHorizontal: 16,
+  },
+  tabletScrollBody: {
+    paddingHorizontal: 28,
+    paddingTop: 16,
+    gap: 18,
+  },
+  tabletOrgCard: {
+    paddingHorizontal: 20,
+    paddingVertical: 18,
+    borderRadius: 20,
+    gap: 16,
+  },
+  tabletOrgLogoBox: {
+    width: 60,
+    height: 60,
+    borderRadius: 16,
+  },
+  tabletOrgLogoImage: {
+    width: 60,
+    height: 60,
+    borderRadius: 16,
+  },
+  tabletOrgNameText: {
+    fontSize: 19,
+  },
+  tabletOrgLocationText: {
+    fontSize: 15,
+  },
+  tabletDropdownBadge: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+  },
+  tabletDateLabel: {
+    fontSize: 15,
+    marginVertical: 4,
+  },
+  tabletReadyBanner: {
+    paddingHorizontal: 20,
+    paddingVertical: 16,
+    borderRadius: 18,
+    gap: 16,
+  },
+  tabletReadyIconCircle: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
+  },
+  tabletReadyTitle: {
+    fontSize: 18,
+  },
+  tabletReadySubtitle: {
+    fontSize: 14,
+    marginTop: 2,
+  },
+  tabletOptionCard: {
+    paddingHorizontal: 24,
+    paddingVertical: 24,
+    borderRadius: 20,
+    gap: 18,
+  },
+  tabletIconBox: {
+    width: 60,
+    height: 60,
+    borderRadius: 16,
+  },
+  tabletOptionTitle: {
+    fontSize: 20,
+  },
+  tabletOptionSubtitle: {
+    fontSize: 14,
+    lineHeight: 20,
   },
 });

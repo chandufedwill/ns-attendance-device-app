@@ -9,6 +9,7 @@ import {
   TextInput,
   Switch,
   Alert,
+  useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -27,6 +28,8 @@ interface StudentRosterItem {
 
 export default function StaffDashboardScreen() {
   const router = useRouter();
+  const { width, height } = useWindowDimensions();
+  const isTablet = Math.min(width, height) >= 600 || width >= 600;
 
   // Active sub-modals
   const [settingsVisible, setSettingsVisible] = useState(false);
@@ -122,7 +125,7 @@ export default function StaffDashboardScreen() {
 
   return (
     <SafeAreaView style={styles.safeArea}>
-      <View style={styles.container}>
+      <View style={[styles.container, isTablet && styles.tabletContainer]}>
         {/* Header */}
         <View style={styles.header}>
           <TouchableOpacity style={styles.iconBtn} onPress={() => router.back()}>
@@ -130,8 +133,8 @@ export default function StaffDashboardScreen() {
           </TouchableOpacity>
 
           <View style={styles.headerCenter}>
-            <Text style={styles.headerTitle}>Attendance Staff</Text>
-            <Text style={styles.headerSub}>{orgName} • {locationName}</Text>
+            <Text style={[styles.headerTitle, isTablet && styles.tabletHeaderTitle]}>Attendance Staff</Text>
+            <Text style={[styles.headerSub, isTablet && styles.tabletHeaderSub]}>{orgName} • {locationName}</Text>
           </View>
 
           <TouchableOpacity
@@ -142,26 +145,26 @@ export default function StaffDashboardScreen() {
           </TouchableOpacity>
         </View>
 
-        <ScrollView contentContainerStyle={styles.scrollBody} showsVerticalScrollIndicator={false}>
+        <ScrollView contentContainerStyle={[styles.scrollBody, isTablet && styles.tabletScrollBody]} showsVerticalScrollIndicator={false}>
           {/* Live Stats Counters (Screen 16) */}
-          <View style={styles.statsCard}>
+          <View style={[styles.statsCard, isTablet && styles.tabletStatsCard]}>
             <View style={styles.statColumn}>
-              <Text style={styles.statNumber}>{students.length}</Text>
-              <Text style={styles.statLabel}>Expected</Text>
+              <Text style={[styles.statNumber, isTablet && styles.tabletStatNumber]}>{students.length}</Text>
+              <Text style={[styles.statLabel, isTablet && styles.tabletStatLabel]}>Expected</Text>
             </View>
-            <View style={styles.statDivider} />
+            <View style={[styles.statDivider, isTablet && { height: 48 }]} />
             <View style={styles.statColumn}>
-              <Text style={[styles.statNumber, { color: Colors.success }]}>
+              <Text style={[styles.statNumber, isTablet && styles.tabletStatNumber, { color: Colors.success }]}>
                 {students.filter((s) => s.status === 'CHECKED_IN').length}
               </Text>
-              <Text style={styles.statLabel}>Checked In</Text>
+              <Text style={[styles.statLabel, isTablet && styles.tabletStatLabel]}>Checked In</Text>
             </View>
-            <View style={styles.statDivider} />
+            <View style={[styles.statDivider, isTablet && { height: 48 }]} />
             <View style={styles.statColumn}>
-              <Text style={[styles.statNumber, { color: Colors.warning }]}>
+              <Text style={[styles.statNumber, isTablet && styles.tabletStatNumber, { color: Colors.warning }]}>
                 {students.filter((s) => s.status === 'CHECKED_OUT').length}
               </Text>
-              <Text style={styles.statLabel}>Checked Out</Text>
+              <Text style={[styles.statLabel, isTablet && styles.tabletStatLabel]}>Checked Out</Text>
             </View>
           </View>
 
@@ -713,5 +716,30 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     textAlign: 'center',
     lineHeight: 20,
+  },
+  tabletContainer: {
+    maxWidth: 720,
+    paddingHorizontal: 24,
+  },
+  tabletScrollBody: {
+    paddingVertical: 20,
+    gap: 20,
+  },
+  tabletHeaderTitle: {
+    fontSize: 22,
+  },
+  tabletHeaderSub: {
+    fontSize: 15,
+  },
+  tabletStatsCard: {
+    padding: 28,
+    borderRadius: 22,
+  },
+  tabletStatNumber: {
+    fontSize: 34,
+  },
+  tabletStatLabel: {
+    fontSize: 14,
+    marginTop: 4,
   },
 });

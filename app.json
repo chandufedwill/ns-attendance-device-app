@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "NationSkills Attendance",
+    "name": "NationSkills Kiosk",
     "slug": "ns-attendance-device-app",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -11,7 +11,7 @@
     "splash": {
       "image": "./assets/images/splash-icon.png",
       "resizeMode": "contain",
-      "backgroundColor": "#111827"
+      "backgroundColor": "#0B4F50"
     },
     "ios": {
       "supportsTablet": true,
@@ -24,7 +24,7 @@
       "package": "com.nationskills.attendance",
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
-        "backgroundColor": "#111827"
+        "backgroundColor": "#0B4F50"
       },
       "permissions": [
         "android.permission.CAMERA",

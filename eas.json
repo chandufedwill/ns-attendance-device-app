@@ -12,11 +12,18 @@
       "distribution": "internal",
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_BASE_URL": "https://api.test.nationskills.com/portal/attendanceDevice"
       }
     },
     "production": {
+      "distribution": "internal",
       "android": {
         "buildType": "apk"
+      },
+      "env": {
+        "EXPO_PUBLIC_API_BASE_URL": "https://api.nationskills.com/portal/attendanceDevice"
       }
     }
   },

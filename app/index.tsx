@@ -149,18 +149,20 @@ export default function DeviceSetupScreen() {
               Setup code provided by your organisation administrator.
             </Text>
 
-            {/* Developer Testing Bypass (Never get locked out during UI testing) */}
-            <TouchableOpacity
-              style={styles.devBypassBtn}
-              onPress={async () => {
-                await DeviceApiService.saveToken('test_dev_device_token');
-                router.replace('/attendance-home' as any);
-              }}
-              activeOpacity={0.7}
-            >
-              <MaterialIcons name="developer-mode" size={16} color={Colors.textSecondary} />
-              <Text style={styles.devBypassText}>Test Mode: Skip to Scanner & Home</Text>
-            </TouchableOpacity>
+            {/* Developer Testing Bypass (Only visible in development mode, hidden in production APK) */}
+            {__DEV__ && (
+              <TouchableOpacity
+                style={styles.devBypassBtn}
+                onPress={async () => {
+                  await DeviceApiService.saveToken('test_dev_device_token');
+                  router.replace('/attendance-home' as any);
+                }}
+                activeOpacity={0.7}
+              >
+                <MaterialIcons name="developer-mode" size={16} color={Colors.textSecondary} />
+                <Text style={styles.devBypassText}>Test Mode: Skip to Scanner & Home</Text>
+              </TouchableOpacity>
+            )}
           </View>
         </ScrollView>
       </KeyboardAvoidingView>

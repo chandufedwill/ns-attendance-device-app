@@ -41,6 +41,20 @@ export interface LocationSwitchRequest {
   pin?: string;
 }
 
+export interface StaffVerifyPinRequest {
+  pin: string;
+  purpose?: string;
+  userId?: string;
+}
+
+export interface StaffVerifyPinResponse {
+  verified: boolean;
+  message?: string;
+  userId?: string;
+  staffName?: string;
+  role?: string;
+}
+
 export interface ClassSessionSummary {
   id: string;
   className: string;

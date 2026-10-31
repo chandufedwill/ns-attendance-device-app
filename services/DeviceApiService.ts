@@ -5,6 +5,8 @@ import {
   DeviceConfigResponse,
   AttendanceLocation,
   LocationSwitchRequest,
+  StaffVerifyPinRequest,
+  StaffVerifyPinResponse,
   AttendanceEligibilityResponse,
   CheckInRequest,
   CheckInResponse,
@@ -249,6 +251,68 @@ export const DeviceApiService = {
     }
 
     return true;
+  },
+
+  /**
+   * Screen 3 / 20 / Staff Access: Verify Staff / Instructor PIN
+   * POST /staff/verify-pin
+   */
+  verifyStaffPin: async (params: StaffVerifyPinRequest): Promise<StaffVerifyPinResponse> => {
+    const token = await DeviceApiService.getStoredToken();
+    const url = `${AppConfig.API_BASE_URL}/staff/verify-pin`;
+
+    const payload = {
+      pin: params.pin.trim(),
+      purpose: params.purpose || 'LOCATION_SWITCH',
+      // If caller passed userId use it, otherwise use Jovin's test staff userId
+      userId: params.userId || 'a6620234-a091-70af-21bc-4c093478c5c8',
+    };
+
+    console.log(`📡 [DeviceApiService] POST ${url}`);
+    console.log(`📤 [DeviceApiService] Verify Staff PIN: purpose=${payload.purpose}, userId=${payload.userId}`);
+
+    try {
+      const response = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${token}`,
+          Accept: 'application/json',
+        },
+        body: JSON.stringify(payload),
+      });
+
+      const data = await response.json().catch(() => null);
+      console.log(`📥 [DeviceApiService] Verify Staff PIN [${response.status}] Response:`, JSON.stringify(data));
+
+      if (!response.ok) {
+        return {
+          verified: false,
+          message: data?.message || 'Incorrect staff PIN. Try again.',
+        };
+      }
+
+      return {
+        verified: true,
+        message: data?.message || 'PIN verified successfully.',
+        userId: data?.data?.userId || payload.userId,
+        staffName: data?.data?.staffName || data?.data?.name,
+        role: data?.data?.role,
+      };
+    } catch (err: any) {
+      console.error('❌ [DeviceApiService] verifyStaffPin error:', err);
+      // In development mode, allow fallback for test PINs (e.g. 121212, 1234, 0000)
+      if (__DEV__ && (params.pin === '121212' || params.pin === '1234' || params.pin === '0000')) {
+        return {
+          verified: true,
+          message: 'PIN verified (dev fallback).',
+        };
+      }
+      return {
+        verified: false,
+        message: err?.message || 'Network error verifying staff PIN.',
+      };
+    }
   },
 
   /**

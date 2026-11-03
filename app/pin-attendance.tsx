@@ -6,6 +6,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Modal,
+  Image,
   useWindowDimensions,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -19,6 +20,42 @@ import { DeviceApiService } from '../services/DeviceApiService';
 import { SoundService } from '../services/SoundService';
 import { KioskBrandHeader } from '../components/KioskBrandHeader';
 import { CheckInSuccessView } from '../components/CheckInSuccessView';
+import { AttendanceEligibilityResponse } from '../types/attendance';
+
+function StudentAvatar({ name, imageUrl }: { name?: string; imageUrl?: string | null }) {
+  const [imgError, setImgError] = useState(false);
+
+  const getInitials = (fullName?: string) => {
+    if (!fullName || fullName.startsWith('Student (')) return '';
+    const parts = fullName.trim().split(/\s+/);
+    if (parts.length >= 2 && parts[0] && parts[1]) {
+      return (parts[0][0] + parts[1][0]).toUpperCase();
+    }
+    return fullName.substring(0, 2).toUpperCase();
+  };
+
+  const initials = getInitials(name);
+
+  if (imageUrl && !imgError) {
+    return (
+      <Image
+        source={{ uri: imageUrl }}
+        style={styles.modalStudentAvatar}
+        onError={() => setImgError(true)}
+      />
+    );
+  }
+
+  return (
+    <View style={styles.modalStudentAvatarFallback}>
+      {initials ? (
+        <Text style={styles.avatarInitialsText}>{initials}</Text>
+      ) : (
+        <MaterialIcons name="person" size={32} color={Colors.primary} />
+      )}
+    </View>
+  );
+}
 
 interface SuccessState {
   studentName: string;
@@ -40,16 +77,45 @@ export default function PinAttendanceScreen() {
   const [activeLocation, setActiveLocation] = useState('');
   const [successData, setSuccessData] = useState<SuccessState | null>(null);
 
+  // Result modal state (same UX as QR scanner screen)
+  const [modalVisible, setModalVisible] = useState(false);
+  const [modalResult, setModalResult] = useState<AttendanceEligibilityResponse | null>(null);
+  const [checkoutInProgress, setCheckoutInProgress] = useState(false);
+  const lastEnteredPinRef = useRef('');
+
   // Inactivity / Idle return timer (25s grace period as requested by Jovin)
   const idleTimerRef = useRef<NodeJS.Timeout | null>(null);
+  const autoCloseTimerRef = useRef<NodeJS.Timeout | null>(null);
 
   const handleReturnToReady = useCallback(() => {
     if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+    if (autoCloseTimerRef.current) clearTimeout(autoCloseTimerRef.current);
+    setModalVisible(false);
+    setModalResult(null);
     setPin('');
     setErrorMessage('');
     setSuccessData(null);
     router.replace('/attendance-home' as any);
   }, [router]);
+
+  const closeModal = useCallback(() => {
+    if (autoCloseTimerRef.current) clearTimeout(autoCloseTimerRef.current);
+    setModalVisible(false);
+    setModalResult(null);
+    setPin('');
+    setErrorMessage('');
+  }, []);
+
+  const triggerAutoClose = useCallback((delayMs = 3500, returnHome = false) => {
+    if (autoCloseTimerRef.current) clearTimeout(autoCloseTimerRef.current);
+    autoCloseTimerRef.current = setTimeout(() => {
+      if (returnHome) {
+        handleReturnToReady();
+      } else {
+        closeModal();
+      }
+    }, delayMs);
+  }, [handleReturnToReady, closeModal]);
 
   const resetIdleTimer = useCallback(() => {
     if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
@@ -78,6 +144,7 @@ export default function PinAttendanceScreen() {
 
     return () => {
       if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+      if (autoCloseTimerRef.current) clearTimeout(autoCloseTimerRef.current);
     };
   }, [resetIdleTimer]);
 
@@ -108,8 +175,49 @@ export default function PinAttendanceScreen() {
     }
   };
 
+  const handleConfirmCheckOut = async () => {
+    if (!modalResult) return;
+    if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+    if (autoCloseTimerRef.current) clearTimeout(autoCloseTimerRef.current);
+    setCheckoutInProgress(true);
+
+    try {
+      const requestId = DeviceApiService.generateRequestId();
+      const checkOutRes = await DeviceApiService.checkOut({
+        method: 'PIN',
+        code: lastEnteredPinRef.current || modalResult.studentId || '',
+        classSessionId: modalResult.classSessionId || '',
+        visitId: String(modalResult.visitId || ''),
+        requestId,
+        checkoutConfirmed: true,
+      });
+
+      try {
+        Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
+        SoundService.playSuccess();
+      } catch {}
+
+      // Switch modal to Checked Out successfully
+      setModalResult({
+        ...modalResult,
+        status: 'CHECK_OUT',
+        checkOutTime: checkOutRes.checkOutTime || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
+      });
+      triggerAutoClose(3500, true);
+    } catch (err: any) {
+      try {
+        SoundService.playError();
+      } catch {}
+      alert(err?.message || 'Check-out failed.');
+    } finally {
+      setCheckoutInProgress(false);
+    }
+  };
+
   const submitPin = async (completedPin: string) => {
     if (idleTimerRef.current) clearTimeout(idleTimerRef.current);
+    if (autoCloseTimerRef.current) clearTimeout(autoCloseTimerRef.current);
+    lastEnteredPinRef.current = completedPin;
     setProcessing(true);
     try {
       console.log(`\n🔑 [PIN Attendance] Identifying via PIN: [${completedPin}]`);
@@ -138,24 +246,46 @@ export default function PinAttendanceScreen() {
           locationName: activeLocation || orgName || 'Attendance Station',
           checkInTime: checkInRes.checkInTime || new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }),
         });
+      } else if (eligibility.status === 'ALREADY_CHECKED_IN') {
+        try {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+          SoundService.playWarning();
+        } catch {}
+        // Open the Already Checked In modal with Check-Out prompt (matches QR flow 100%)
+        setModalResult(eligibility);
+        setModalVisible(true);
+        // Stays visible for user decision (Check Out / Cancel)
+      } else if (eligibility.status === 'ALREADY_ATTENDED') {
+        try {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+          SoundService.playWarning();
+        } catch {}
+        setModalResult(eligibility);
+        setModalVisible(true);
+        triggerAutoClose(3500, false);
+      } else if (eligibility.status === 'TOO_EARLY' || eligibility.status === 'CHECKIN_CLOSED') {
+        try {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
+          SoundService.playWarning();
+        } catch {}
+        setModalResult(eligibility);
+        setModalVisible(true);
+        triggerAutoClose(3500, false);
+      } else if (eligibility.status === 'NO_SESSION' && eligibility.studentName) {
+        try {
+          Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
+          SoundService.playError();
+        } catch {}
+        setModalResult(eligibility);
+        setModalVisible(true);
+        triggerAutoClose(3500, false);
       } else {
         try {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
           SoundService.playError();
         } catch {}
 
-        let msg = eligibility.message || 'Invalid PIN or no eligible active session.';
-        if (eligibility.status === 'NO_SESSION' && eligibility.studentName) {
-          msg = `Hi ${eligibility.studentName}, no active sessions scheduled right now.`;
-        } else if ((eligibility.status === 'TOO_EARLY' || eligibility.status === 'CHECKIN_CLOSED') && eligibility.studentName) {
-          msg = `Hi ${eligibility.studentName}, outside permitted check-in window for ${eligibility.className || 'session'}.`;
-        } else if (eligibility.status === 'ALREADY_CHECKED_IN') {
-          msg = `Already checked in for ${eligibility.className || 'this session'}.`;
-        } else if (eligibility.status === 'ALREADY_ATTENDED') {
-          msg = `Attendance already completed for ${eligibility.className || 'today'}.`;
-        }
-
-        setErrorMessage(msg);
+        setErrorMessage(eligibility.message || 'Invalid PIN entered. Please try again.');
         setPin('');
       }
     } catch (err: any) {
@@ -297,6 +427,195 @@ export default function PinAttendanceScreen() {
           </TouchableOpacity>
         </View>
       </View>
+
+      {/* ======================================================== */}
+      {/* RESULT MODALS (Matches QR Flow: Check-out, Already Checked-in, etc.) */}
+      {/* ======================================================== */}
+      <Modal visible={modalVisible} transparent animationType="fade" onRequestClose={closeModal}>
+        <View style={styles.modalBackdrop}>
+          <View style={styles.modalCard}>
+            {/* Screen: Check-Out Successful */}
+            {modalResult?.status === 'CHECK_OUT' && (
+              <>
+                <View style={[styles.statusIconCircle, { backgroundColor: Colors.success }]}>
+                  <MaterialIcons name="check" size={48} color={Colors.textWhite} />
+                </View>
+                <Text style={styles.modalHeading}>Checked out successfully!</Text>
+
+                <View style={styles.modalStudentBox}>
+                  <StudentAvatar
+                    name={modalResult.studentName}
+                    imageUrl={modalResult.profileImageUrl}
+                  />
+                  <Text style={styles.modalStudentName}>{modalResult.studentName || 'Student Member'}</Text>
+                  {modalResult.className ? <Text style={styles.modalSessionTime}>{modalResult.className}</Text> : null}
+                  {modalResult.sessionTime ? <Text style={styles.modalSessionTime}>{modalResult.sessionTime}</Text> : null}
+                </View>
+
+                <View style={styles.timestampRow}>
+                  {modalResult.checkOutTime && (
+                    <Text style={styles.timestampText}>Checked out at {modalResult.checkOutTime}</Text>
+                  )}
+                </View>
+
+                <TouchableOpacity
+                  style={styles.modalCloseBtn}
+                  onPress={handleReturnToReady}
+                >
+                  <Text style={styles.modalCloseBtnText}>Done</Text>
+                </TouchableOpacity>
+              </>
+            )}
+
+            {/* Screen 7 & 8: Already Checked In (Prompt for Check-out) */}
+            {modalResult?.status === 'ALREADY_CHECKED_IN' && (
+              <>
+                <View style={[styles.statusIconCircle, { backgroundColor: Colors.success }]}>
+                  <MaterialIcons name="check" size={48} color={Colors.textWhite} />
+                </View>
+                <Text style={styles.modalHeading}>Already checked in</Text>
+
+                <View style={styles.modalStudentBox}>
+                  <StudentAvatar
+                    name={modalResult.studentName}
+                    imageUrl={modalResult.profileImageUrl}
+                  />
+                  <Text style={styles.modalStudentName}>{modalResult.studentName || 'Student Member'}</Text>
+                  {modalResult.className ? <Text style={styles.modalSessionTime}>{modalResult.className}</Text> : null}
+                  {modalResult.sessionTime ? <Text style={styles.modalSessionTime}>{modalResult.sessionTime}</Text> : null}
+                </View>
+
+                {modalResult.checkInTime ? (
+                  <Text style={styles.timestampText}>Checked in at {modalResult.checkInTime}</Text>
+                ) : null}
+
+                <View style={styles.infoAlertBox}>
+                  <MaterialIcons name="info" size={18} color={Colors.info} />
+                  <Text style={styles.infoAlertText}>
+                    Student is currently checked in. Do you want to check them out?
+                  </Text>
+                </View>
+
+                <View style={styles.actionRow}>
+                  <TouchableOpacity
+                    style={[styles.confirmCheckOutBtn, checkoutInProgress && { opacity: 0.7 }]}
+                    onPress={handleConfirmCheckOut}
+                    disabled={checkoutInProgress}
+                  >
+                    {checkoutInProgress ? (
+                      <ActivityIndicator color={Colors.textWhite} />
+                    ) : (
+                      <Text style={styles.confirmCheckOutBtnText}>Check Out</Text>
+                    )}
+                  </TouchableOpacity>
+
+                  <TouchableOpacity style={styles.cancelBtn} onPress={closeModal}>
+                    <Text style={styles.cancelBtnText}>Cancel</Text>
+                  </TouchableOpacity>
+                </View>
+              </>
+            )}
+
+            {/* Screen: Already Attended Today */}
+            {modalResult?.status === 'ALREADY_ATTENDED' && (
+              <>
+                <View style={[styles.statusIconCircle, { backgroundColor: Colors.info }]}>
+                  <MaterialIcons name="done-all" size={44} color={Colors.textWhite} />
+                </View>
+                <Text style={styles.modalHeading}>Already attended today</Text>
+
+                <View style={styles.modalStudentBox}>
+                  <StudentAvatar
+                    name={modalResult.studentName}
+                    imageUrl={modalResult.profileImageUrl}
+                  />
+                  <Text style={styles.modalStudentName}>{modalResult.studentName || 'Student Member'}</Text>
+                  {modalResult.className ? <Text style={styles.modalSessionTime}>{modalResult.className}</Text> : null}
+                  {modalResult.sessionTime ? <Text style={styles.modalSessionTime}>{modalResult.sessionTime}</Text> : null}
+                </View>
+
+                <Text style={styles.modalDescText}>
+                  {modalResult.message || 'You have already attended this class today.'}
+                </Text>
+
+                <TouchableOpacity style={styles.primaryModalBtn} onPress={closeModal}>
+                  <Text style={styles.primaryModalBtnText}>Done</Text>
+                </TouchableOpacity>
+              </>
+            )}
+
+            {/* Screen 10: No Eligible Session */}
+            {modalResult?.status === 'NO_SESSION' && (
+              <>
+                <View style={[styles.statusIconCircle, { backgroundColor: Colors.error }]}>
+                  <MaterialIcons name="priority-high" size={44} color={Colors.textWhite} />
+                </View>
+                <Text style={styles.modalHeading}>No session found</Text>
+                <View style={styles.modalStudentBox}>
+                  <StudentAvatar
+                    name={modalResult.studentName}
+                    imageUrl={modalResult.profileImageUrl}
+                  />
+                  <Text style={styles.modalStudentName}>{modalResult.studentName || 'Student Member'}</Text>
+                </View>
+                <Text style={styles.modalDescText}>
+                  We couldn't find an eligible session at this location right now. Please speak to your instructor.
+                </Text>
+                <TouchableOpacity style={styles.primaryModalBtn} onPress={closeModal}>
+                  <Text style={styles.primaryModalBtnText}>Done</Text>
+                </TouchableOpacity>
+              </>
+            )}
+
+            {/* Screen 11: Too Early */}
+            {modalResult?.status === 'TOO_EARLY' && (
+              <>
+                <View style={[styles.statusIconCircle, { backgroundColor: Colors.warning }]}>
+                  <MaterialIcons name="access-time" size={44} color={Colors.textWhite} />
+                </View>
+                <Text style={styles.modalHeading}>You're a little early</Text>
+                <View style={styles.modalStudentBox}>
+                  <StudentAvatar
+                    name={modalResult.studentName}
+                    imageUrl={modalResult.profileImageUrl}
+                  />
+                  <Text style={styles.modalStudentName}>{modalResult.studentName || 'Student Member'}</Text>
+                  {modalResult.className ? <Text style={styles.modalSessionTime}>{modalResult.className}</Text> : null}
+                </View>
+                <Text style={styles.modalDescText}>
+                  {modalResult.opensAt ? `Check-in opens at ${modalResult.opensAt}.` : 'Check-in is not open yet. Please check your class timetable.'}
+                </Text>
+                <TouchableOpacity style={styles.modalCloseBtn} onPress={closeModal}>
+                  <Text style={styles.modalCloseBtnText}>Close</Text>
+                </TouchableOpacity>
+              </>
+            )}
+
+            {/* Screen 12: Check-In Closed */}
+            {modalResult?.status === 'CHECKIN_CLOSED' && (
+              <>
+                <View style={[styles.statusIconCircle, { backgroundColor: Colors.error }]}>
+                  <MaterialIcons name="block" size={44} color={Colors.textWhite} />
+                </View>
+                <Text style={styles.modalHeading}>Check-in has closed</Text>
+                <View style={styles.modalStudentBox}>
+                  <StudentAvatar
+                    name={modalResult.studentName}
+                    imageUrl={modalResult.profileImageUrl}
+                  />
+                  <Text style={styles.modalStudentName}>{modalResult.studentName || 'Student Member'}</Text>
+                </View>
+                <Text style={styles.modalDescText}>
+                  This session check-in window has ended. Please speak to your instructor.
+                </Text>
+                <TouchableOpacity style={styles.modalCloseBtn} onPress={closeModal}>
+                  <Text style={styles.modalCloseBtnText}>Close</Text>
+                </TouchableOpacity>
+              </>
+            )}
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -542,5 +861,165 @@ const styles = StyleSheet.create({
   },
   cancelPillBtnTextTablet: {
     fontSize: 18,
+  },
+
+  // Modal styling (matching QR Scanner flow 100%)
+  modalBackdrop: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.7)',
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 24,
+  },
+  modalCard: {
+    width: '100%',
+    maxWidth: 420,
+    backgroundColor: Colors.cardBackground,
+    borderRadius: 24,
+    padding: 28,
+    alignItems: 'center',
+    gap: 12,
+  },
+  statusIconCircle: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 6,
+  },
+  modalHeading: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: Colors.text,
+    textAlign: 'center',
+  },
+  modalStudentBox: {
+    alignItems: 'center',
+    gap: 2,
+    marginVertical: 4,
+  },
+  modalStudentAvatar: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    marginBottom: 8,
+    borderWidth: 2,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surfaceSubtle,
+  },
+  modalStudentAvatarFallback: {
+    width: 68,
+    height: 68,
+    borderRadius: 34,
+    marginBottom: 8,
+    backgroundColor: Colors.surfaceSubtle,
+    borderWidth: 2,
+    borderColor: Colors.border,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  avatarInitialsText: {
+    fontSize: 22,
+    fontWeight: '800',
+    color: Colors.primary,
+    letterSpacing: 1,
+  },
+  modalStudentName: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.text,
+  },
+  modalSessionTime: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+  },
+  timestampRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  timestampText: {
+    fontSize: 13,
+    fontWeight: '600',
+    color: Colors.textSecondary,
+  },
+  modalCloseBtn: {
+    width: '100%',
+    height: 48,
+    backgroundColor: Colors.surfaceSubtle,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  modalCloseBtnText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.text,
+  },
+  infoAlertBox: {
+    flexDirection: 'row',
+    backgroundColor: Colors.infoLight,
+    padding: 12,
+    borderRadius: 12,
+    gap: 8,
+    marginVertical: 8,
+    alignItems: 'center',
+  },
+  infoAlertText: {
+    fontSize: 13,
+    color: Colors.text,
+    flex: 1,
+    lineHeight: 18,
+  },
+  actionRow: {
+    width: '100%',
+    gap: 8,
+    marginTop: 8,
+  },
+  confirmCheckOutBtn: {
+    width: '100%',
+    height: 50,
+    backgroundColor: Colors.primary,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  confirmCheckOutBtnText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.textWhite,
+  },
+  cancelBtn: {
+    width: '100%',
+    height: 44,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  cancelBtnText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.textSecondary,
+  },
+  modalDescText: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 20,
+    marginVertical: 6,
+  },
+  primaryModalBtn: {
+    width: '100%',
+    height: 50,
+    backgroundColor: Colors.primary,
+    borderRadius: 12,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginTop: 8,
+  },
+  primaryModalBtnText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.textWhite,
   },
 });

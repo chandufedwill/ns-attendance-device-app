@@ -14,7 +14,9 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { MaterialIcons } from '@expo/vector-icons';
+import * as SecureStore from 'expo-secure-store';
 import { Colors } from '../constants/theme';
+import { AppConfig } from '../constants/config';
 import { DeviceApiService } from '../services/DeviceApiService';
 import { KioskService } from '../services/KioskService';
 import { DeviceSettingsService } from '../services/DeviceSettingsService';
@@ -42,6 +44,7 @@ export default function StaffDashboardScreen() {
   const [deviceName, setDeviceName] = useState('Attendance Device');
   const [orgName, setOrgName] = useState('');
   const [locationName, setLocationName] = useState('');
+  const [staffName, setStaffName] = useState('');
 
   // Toggles for device settings
   const [qrEnabled, setQrEnabled] = useState(true);
@@ -61,6 +64,14 @@ export default function StaffDashboardScreen() {
         if (cfg?.organisationName) setOrgName(cfg.organisationName);
         if (cfg?.locationName) setLocationName(cfg.locationName);
 
+        const rawUser = await SecureStore.getItemAsync('last_verified_staff_user');
+        if (rawUser) {
+          try {
+            const parsed = JSON.parse(rawUser);
+            if (parsed?.displayName) setStaffName(parsed.displayName);
+          } catch {}
+        }
+
         const settings = await DeviceSettingsService.getSettings();
         setQrEnabled(settings.qrEnabled);
         setPinEnabled(settings.pinEnabled);
@@ -69,6 +80,13 @@ export default function StaffDashboardScreen() {
     };
     loadConfig();
   }, []);
+
+  const handleExitStaffDashboard = async () => {
+    try {
+      await SecureStore.deleteItemAsync('last_verified_staff_user');
+    } catch {}
+    router.replace('/attendance-home' as any);
+  };
 
   const handleToggleKioskLock = (value: boolean) => {
     setKioskLocked(value);
@@ -128,13 +146,15 @@ export default function StaffDashboardScreen() {
       <View style={[styles.container, isTablet && styles.tabletContainer]}>
         {/* Header */}
         <View style={styles.header}>
-          <TouchableOpacity style={styles.iconBtn} onPress={() => router.back()}>
+          <TouchableOpacity style={styles.iconBtn} onPress={handleExitStaffDashboard}>
             <MaterialIcons name="arrow-back" size={24} color={Colors.text} />
           </TouchableOpacity>
 
           <View style={styles.headerCenter}>
             <Text style={[styles.headerTitle, isTablet && styles.tabletHeaderTitle]}>Attendance Staff</Text>
-            <Text style={[styles.headerSub, isTablet && styles.tabletHeaderSub]}>{orgName} • {locationName}</Text>
+            <Text style={[styles.headerSub, isTablet && styles.tabletHeaderSub]}>
+              {staffName ? `${staffName} • ` : ''}{orgName} • {locationName}
+            </Text>
           </View>
 
           <TouchableOpacity
@@ -386,7 +406,7 @@ export default function StaffDashboardScreen() {
                 </View>
                 <View style={styles.infoRow}>
                   <Text style={styles.infoKey}>App Version</Text>
-                  <Text style={styles.infoVal}>1.0.0</Text>
+                  <Text style={styles.infoVal}>{AppConfig.APP_VERSION}</Text>
                 </View>
                 <View style={styles.infoRow}>
                   <Text style={styles.infoKey}>Last Sync</Text>

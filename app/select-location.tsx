@@ -52,8 +52,11 @@ export default function SelectLocationScreen() {
       console.log('📍 [SelectLocation] Fetched dynamic locations:', fetched);
       if (fetched && fetched.length > 0) {
         setLocations(fetched);
-        // Highlight active location if matching config
-        const initialLoc = (config?.locationId && fetched.find((l) => l.id === config.locationId)) || fetched[0];
+        // Highlight active location: prioritize backend isActive flag, then config.locationId
+        const initialLoc =
+          fetched.find((l) => l.isActive) ||
+          (config?.locationId && fetched.find((l) => l.id === config.locationId)) ||
+          fetched[0];
         setSelectedLocationId(initialLoc.id);
       } else {
         setLocations([]);
@@ -77,7 +80,21 @@ export default function SelectLocationScreen() {
 
     try {
       console.log(`📍 [SelectLocation] Switching device location on server to ${loc.locationName} (${loc.id})...`);
-      await DeviceApiService.switchLocation({ locationId: loc.id });
+      const staffUserRaw = await SecureStore.getItemAsync('last_verified_staff_user');
+      let staffUserId: string | undefined;
+      let staffPin: string | undefined;
+      if (staffUserRaw) {
+        try {
+          const parsed = JSON.parse(staffUserRaw);
+          staffUserId = parsed?.userId;
+          staffPin = parsed?.pin;
+        } catch {}
+      }
+      await DeviceApiService.switchLocation({
+        locationId: loc.id,
+        userId: staffUserId,
+        pin: staffPin,
+      });
     } catch (e) {
       console.warn('Failed to switch location on server:', e);
     }

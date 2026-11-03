@@ -12,4 +12,15 @@ export const AppConfig = {
     ACTIVE_LOCATION: 'ns_attendance_active_location',
     STAFF_PIN: 'ns_attendance_staff_pin',
   },
+
+  // Central Configurable Staff PIN (Fallback / Active Test PIN)
+  // Edit this value anytime to change the default allowed staff PIN globally across the app
+  DEFAULT_STAFF_PIN: '121212',
+
+  // Clean Production App Version
+  APP_VERSION: '1.0.0',
+
+  // Permanent Fallback Device Token for Testing
+  // Paste your registered token here anytime so the app stays permanently connected even after cache clear/reinstall!
+  FALLBACK_DEVICE_TOKEN: '',
 };

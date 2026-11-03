@@ -22,6 +22,7 @@
     },
     "android": {
       "package": "com.nationskills.attendance",
+      "versionCode": 1,
       "adaptiveIcon": {
         "foregroundImage": "./assets/images/adaptive-icon.png",
         "backgroundColor": "#0B4F50"

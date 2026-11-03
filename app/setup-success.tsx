@@ -13,8 +13,8 @@ export default function SetupSuccessScreen() {
   const organisationName = params.organisationName || '';
 
   const handleContinue = () => {
-    // Navigate to Screen 3: Select Location
-    router.replace('/select-location' as any);
+    // Navigate directly to Screen 4: Attendance Home (no select-location needed on initial setup)
+    router.replace('/attendance-home' as any);
   };
 
   return (

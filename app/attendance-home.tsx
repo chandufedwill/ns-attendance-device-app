@@ -111,8 +111,12 @@ export default function AttendanceHomeScreen() {
       setQrEnabled(settings.qrEnabled);
       setPinEnabled(settings.pinEnabled);
 
-      // 2. Load device config
-      const config = await DeviceApiService.getDeviceConfig().catch(() => null);
+      // 2. Fetch remote device config and live locations simultaneously
+      const [config, locationsList] = await Promise.all([
+        DeviceApiService.getDeviceConfig().catch(() => null),
+        DeviceApiService.getLocations().catch(() => [] as AttendanceLocation[]),
+      ]);
+
       if (config?.organisationName) {
         setOrgName(config.organisationName);
         memoryCache.orgName = config.organisationName;
@@ -126,24 +130,56 @@ export default function AttendanceHomeScreen() {
         memoryCache.orgLogoUrl = config.organisationLogoUrl;
       }
 
-      // 3. Load active location
-      const storedLocation = await SecureStore.getItemAsync(AppConfig.STORAGE_KEYS.ACTIVE_LOCATION);
-      if (storedLocation) {
-        const parsed = JSON.parse(storedLocation);
-        if (parsed?.locationName) {
-          setActiveLocation(parsed.locationName);
-          memoryCache.activeLocation = parsed.locationName;
+      if (locationsList && locationsList.length > 0) {
+        setLocations(locationsList);
+      }
+
+      // 3. Resolve active location: ALWAYS PRIORITIZE LATEST BACKEND DATA OVER LOCAL CACHE
+      let resolvedLoc: AttendanceLocation | null = null;
+
+      if (locationsList && locationsList.length > 0) {
+        // Priority A: Backend explicitly flagged active location (isActive === true)
+        const activeFromList = locationsList.find((l) => l.isActive);
+        if (activeFromList) {
+          resolvedLoc = activeFromList;
+        } else if (config?.locationId) {
+          // Priority B: Matching location from device config locationId
+          const matchingLoc = locationsList.find((l) => l.id === config.locationId);
+          if (matchingLoc) resolvedLoc = matchingLoc;
         }
-        if (parsed?.id) {
-          setActiveLocationId(parsed.id);
-          memoryCache.activeLocationId = parsed.id;
-        }
-      } else if (config?.locationName) {
-        setActiveLocation(config.locationName);
-        memoryCache.activeLocation = config.locationName;
-        if (config?.locationId) {
-          setActiveLocationId(config.locationId);
-          memoryCache.activeLocationId = config.locationId;
+      }
+
+      // Priority C: Direct locationName/locationId returned in config
+      if (!resolvedLoc && (config?.locationName || config?.locationId)) {
+        resolvedLoc = {
+          id: config?.locationId || '',
+          locationName: config?.locationName || 'Main Studio',
+          isActive: true,
+        };
+      }
+
+      if (resolvedLoc) {
+        console.log(`📍 [attendance-home] Synced active location with backend: ${resolvedLoc.locationName} (${resolvedLoc.id})`);
+        setActiveLocation(resolvedLoc.locationName);
+        setActiveLocationId(resolvedLoc.id);
+        memoryCache.activeLocation = resolvedLoc.locationName;
+        memoryCache.activeLocationId = resolvedLoc.id;
+
+        // Keep local SecureStore in sync with latest backend location
+        await SecureStore.setItemAsync(AppConfig.STORAGE_KEYS.ACTIVE_LOCATION, JSON.stringify(resolvedLoc)).catch(() => null);
+      } else {
+        // Priority D: Offline fallback to locally cached SecureStore
+        const storedLocation = await SecureStore.getItemAsync(AppConfig.STORAGE_KEYS.ACTIVE_LOCATION);
+        if (storedLocation) {
+          const parsed = JSON.parse(storedLocation);
+          if (parsed?.locationName) {
+            setActiveLocation(parsed.locationName);
+            memoryCache.activeLocation = parsed.locationName;
+          }
+          if (parsed?.id) {
+            setActiveLocationId(parsed.id);
+            memoryCache.activeLocationId = parsed.id;
+          }
         }
       }
     } catch (err) {
@@ -208,12 +244,8 @@ export default function AttendanceHomeScreen() {
         >
           {/* Main Top Section */}
           <View style={[styles.mainOptionsStack, isTablet && styles.mainOptionsStackTablet]}>
-            {/* Organisation & Location Dropdown Card */}
-            <TouchableOpacity
-              style={[styles.orgCard, isTablet && styles.tabletOrgCard]}
-              onPress={openLocationSelector}
-              activeOpacity={0.8}
-            >
+            {/* Organisation & Active Location (Strictly Read-Only Display) */}
+            <View style={[styles.orgCard, isTablet && styles.tabletOrgCard]}>
               {/* Org Logo / Icon */}
               <View style={[styles.orgLogoBox, isTablet && styles.tabletOrgLogoBox]}>
                 {orgLogoUrl && !logoFailed ? (
@@ -245,15 +277,11 @@ export default function AttendanceHomeScreen() {
                     ]}
                     numberOfLines={1}
                   >
-                    {activeLocation || 'Tap to Select Location'}
+                    {activeLocation || 'Attendance Station'}
                   </Text>
                 </View>
               </View>
-
-              <View style={[styles.dropdownBadge, isTablet && styles.tabletDropdownBadge]}>
-                <MaterialIcons name="keyboard-arrow-down" size={isTablet ? 26 : 22} color={Colors.textSecondary} />
-              </View>
-            </TouchableOpacity>
+            </View>
 
             {/* Date Subtitle */}
             <Text style={[styles.dateLabel, isTablet && styles.tabletDateLabel]}>{todayFormatted}</Text>
@@ -341,6 +369,11 @@ export default function AttendanceHomeScreen() {
               <Text style={[styles.helpTitle, isTablet && styles.tabletHelpTitle]}>Need help?</Text>
               <Text style={[styles.helpSubtitle, isTablet && styles.tabletHelpSubtitle]}>Ask an instructor for assistance.</Text>
             </View>
+          </View>
+
+          {/* Clean Enterprise Version Footer */}
+          <View style={styles.versionFooter}>
+            <Text style={styles.versionFooterText}>Version {AppConfig.APP_VERSION}</Text>
           </View>
         </ScrollView>
 
@@ -985,5 +1018,18 @@ const styles = StyleSheet.create({
   },
   tabletHelpSubtitle: {
     fontSize: 14,
+  },
+  versionFooter: {
+    width: '100%',
+    alignItems: 'center',
+    paddingVertical: 14,
+    marginTop: 6,
+    marginBottom: 4,
+  },
+  versionFooterText: {
+    fontSize: 11,
+    color: '#94A3B8',
+    fontWeight: '500',
+    letterSpacing: 0.4,
   },
 });

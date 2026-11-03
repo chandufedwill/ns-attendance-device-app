@@ -41,6 +41,11 @@ export interface LocationSwitchRequest {
   pin?: string;
 }
 
+export interface AvailableStaff {
+  userId: string;
+  displayName: string;
+}
+
 export interface StaffVerifyPinRequest {
   pin: string;
   purpose?: string;

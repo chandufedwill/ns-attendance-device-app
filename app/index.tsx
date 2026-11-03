@@ -163,6 +163,10 @@ export default function DeviceSetupScreen() {
                 <Text style={styles.devBypassText}>Test Mode: Skip to Scanner & Home</Text>
               </TouchableOpacity>
             )}
+            {/* Version Footer */}
+            <Text style={{ textAlign: 'center', fontSize: 11, color: '#94A3B8', marginTop: 20, fontWeight: '500', letterSpacing: 0.3 }}>
+              Version {AppConfig.APP_VERSION}
+            </Text>
           </View>
         </ScrollView>
       </KeyboardAvoidingView>

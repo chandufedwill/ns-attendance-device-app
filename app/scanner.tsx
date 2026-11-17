@@ -8,6 +8,7 @@ import {
   ActivityIndicator,
   Animated,
   Image,
+  TouchableWithoutFeedback,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -232,17 +233,18 @@ export default function MainQRScannerScreen() {
             SoundService.playWarning();
           } catch {}
           triggerAutoClose(3500, false);
-        } else if (eligibility.status === 'TOO_EARLY' || eligibility.status === 'CHECKIN_CLOSED') {
+        } else if (eligibility.status === 'TOO_EARLY' || eligibility.status === 'CHECKIN_CLOSED' || eligibility.status === 'NO_SESSION') {
           try {
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
             SoundService.playWarning();
           } catch {}
-          triggerAutoClose(3500, false);
+          triggerAutoClose(4000, false);
         } else {
           try {
             Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
             SoundService.playError();
           } catch {}
+          triggerAutoClose(4000, false);
         }
       }
     } catch (err: any) {
@@ -255,6 +257,7 @@ export default function MainQRScannerScreen() {
         message: err?.message || 'Could not verify student pass.',
       });
       setModalVisible(true);
+      triggerAutoClose(4000, false);
     } finally {
       setIsScanning(false);
     }
@@ -406,7 +409,7 @@ export default function MainQRScannerScreen() {
       {/* ======================================================== */}
       {/* RESULT MODALS (Screen 3 Check-In Success & Statuses)     */}
       {/* ======================================================== */}
-      <Modal visible={modalVisible} transparent={modalResult?.status !== 'CHECK_IN'} animationType="fade" onRequestClose={handleReturnToHome}>
+      <Modal visible={modalVisible} transparent={modalResult?.status !== 'CHECK_IN'} animationType="fade" onRequestClose={closeModal}>
         {modalResult?.status === 'CHECK_IN' ? (
           <SafeAreaView style={{ flex: 1, backgroundColor: '#F8FAFC' }}>
             <CheckInSuccessView
@@ -420,9 +423,11 @@ export default function MainQRScannerScreen() {
             />
           </SafeAreaView>
         ) : (
-          <View style={styles.modalBackdrop}>
-            <View style={styles.modalCard}>
-              {modalResult?.status === 'CHECK_OUT' && (
+          <TouchableWithoutFeedback onPress={closeModal}>
+            <View style={styles.modalBackdrop}>
+              <TouchableWithoutFeedback onPress={() => {}}>
+                <View style={styles.modalCard}>
+                  {modalResult?.status === 'CHECK_OUT' && (
                 <>
                   <View style={[styles.statusIconCircle, { backgroundColor: Colors.success }]}>
                     <MaterialIcons name="check" size={48} color={Colors.textWhite} />
@@ -578,7 +583,7 @@ export default function MainQRScannerScreen() {
               </>
             )}
 
-            {/* Screen 12: Check-In Closed */}
+            {/* Screen 12: Check-In Closed / Out of hours */}
             {modalResult?.status === 'CHECKIN_CLOSED' && (
               <>
                 <View style={[styles.statusIconCircle, { backgroundColor: Colors.error }]}>
@@ -591,9 +596,11 @@ export default function MainQRScannerScreen() {
                     imageUrl={modalResult.profileImageUrl}
                   />
                   <Text style={styles.modalStudentName}>{modalResult.studentName || 'Student Member'}</Text>
+                  {modalResult.className ? <Text style={styles.modalSessionTime}>{modalResult.className}</Text> : null}
+                  {modalResult.sessionTime ? <Text style={styles.modalSessionTime}>{modalResult.sessionTime}</Text> : null}
                 </View>
                 <Text style={styles.modalDescText}>
-                  This session check-in window has ended. Please speak to your instructor.
+                  {modalResult.message || 'This session check-in window has ended. Please speak to your instructor.'}
                 </Text>
                 <TouchableOpacity style={styles.modalCloseBtn} onPress={closeModal}>
                   <Text style={styles.modalCloseBtnText}>Close</Text>
@@ -609,15 +616,54 @@ export default function MainQRScannerScreen() {
                 </View>
                 <Text style={styles.modalHeading}>QR not recognised</Text>
                 <Text style={styles.modalDescText}>
-                  Please scan your official member QR pass.
+                  {modalResult.message || 'Please scan your official member QR pass.'}
                 </Text>
                 <TouchableOpacity style={styles.primaryModalBtn} onPress={closeModal}>
                   <Text style={styles.primaryModalBtnText}>Try again</Text>
                 </TouchableOpacity>
               </>
             )}
-          </View>
-        </View>
+
+            {/* Fallback Catch-All: For any unhandled status (e.g. REJECTED, OUT_OF_HOURS, error, etc.) */}
+            {![
+              'CHECK_OUT',
+              'ALREADY_CHECKED_IN',
+              'ALREADY_ATTENDED',
+              'NO_SESSION',
+              'TOO_EARLY',
+              'CHECKIN_CLOSED',
+              'INVALID_CODE',
+            ].includes(modalResult?.status || '') && (
+              <>
+                <View style={[styles.statusIconCircle, { backgroundColor: Colors.warning }]}>
+                  <MaterialIcons name="warning-amber" size={44} color={Colors.textWhite} />
+                </View>
+                <Text style={styles.modalHeading}>
+                  {modalResult?.status === 'REJECTED' ? 'Check-in Not Available' : 'Attendance Notice'}
+                </Text>
+                {modalResult?.studentName ? (
+                  <View style={styles.modalStudentBox}>
+                    <StudentAvatar
+                      name={modalResult.studentName}
+                      imageUrl={modalResult.profileImageUrl}
+                    />
+                    <Text style={styles.modalStudentName}>{modalResult.studentName}</Text>
+                    {modalResult.className ? <Text style={styles.modalSessionTime}>{modalResult.className}</Text> : null}
+                    {modalResult.sessionTime ? <Text style={styles.modalSessionTime}>{modalResult.sessionTime}</Text> : null}
+                  </View>
+                ) : null}
+                <Text style={styles.modalDescText}>
+                  {modalResult?.message || 'Unable to check in at this time. Please speak to your instructor.'}
+                </Text>
+                <TouchableOpacity style={styles.primaryModalBtn} onPress={closeModal}>
+                  <Text style={styles.primaryModalBtnText}>Close</Text>
+                </TouchableOpacity>
+              </>
+            )}
+                </View>
+              </TouchableWithoutFeedback>
+            </View>
+          </TouchableWithoutFeedback>
         )}
       </Modal>
     </View>

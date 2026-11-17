@@ -8,6 +8,7 @@ import {
   Modal,
   Image,
   useWindowDimensions,
+  TouchableWithoutFeedback,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
@@ -137,7 +138,7 @@ export default function PinAttendanceScreen() {
           const parsed = JSON.parse(stored);
           if (parsed?.locationName) setActiveLocation(parsed.locationName);
         }
-      } catch {}
+      } catch { }
     };
     loadMetadata();
     resetIdleTimer();
@@ -156,7 +157,7 @@ export default function PinAttendanceScreen() {
       setErrorMessage('');
       try {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      } catch {}
+      } catch { }
 
       if (newPin.length === 6) {
         submitPin(newPin);
@@ -171,7 +172,7 @@ export default function PinAttendanceScreen() {
       setErrorMessage('');
       try {
         Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light);
-      } catch {}
+      } catch { }
     }
   };
 
@@ -195,7 +196,7 @@ export default function PinAttendanceScreen() {
       try {
         Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
         SoundService.playSuccess();
-      } catch {}
+      } catch { }
 
       // Switch modal to Checked Out successfully
       setModalResult({
@@ -207,7 +208,7 @@ export default function PinAttendanceScreen() {
     } catch (err: any) {
       try {
         SoundService.playError();
-      } catch {}
+      } catch { }
       alert(err?.message || 'Check-out failed.');
     } finally {
       setCheckoutInProgress(false);
@@ -236,7 +237,7 @@ export default function PinAttendanceScreen() {
         try {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
           SoundService.playSuccess();
-        } catch {}
+        } catch { }
 
         // Show Screen 3: Check-In Successful
         setSuccessData({
@@ -250,7 +251,7 @@ export default function PinAttendanceScreen() {
         try {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
           SoundService.playWarning();
-        } catch {}
+        } catch { }
         // Open the Already Checked In modal with Check-Out prompt (matches QR flow 100%)
         setModalResult(eligibility);
         setModalVisible(true);
@@ -259,31 +260,32 @@ export default function PinAttendanceScreen() {
         try {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
           SoundService.playWarning();
-        } catch {}
+        } catch { }
         setModalResult(eligibility);
         setModalVisible(true);
         triggerAutoClose(3500, false);
-      } else if (eligibility.status === 'TOO_EARLY' || eligibility.status === 'CHECKIN_CLOSED') {
+      } else if (eligibility.status === 'TOO_EARLY' || eligibility.status === 'CHECKIN_CLOSED' || eligibility.status === 'NO_SESSION') {
         try {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning);
           SoundService.playWarning();
-        } catch {}
+        } catch { }
         setModalResult(eligibility);
         setModalVisible(true);
-        triggerAutoClose(3500, false);
-      } else if (eligibility.status === 'NO_SESSION' && eligibility.studentName) {
+        triggerAutoClose(4000, false);
+      } else if (eligibility.studentName) {
+        // Any other non-checkin status where student was identified
         try {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
           SoundService.playError();
-        } catch {}
+        } catch { }
         setModalResult(eligibility);
         setModalVisible(true);
-        triggerAutoClose(3500, false);
+        triggerAutoClose(4000, false);
       } else {
         try {
           Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error);
           SoundService.playError();
-        } catch {}
+        } catch { }
 
         setErrorMessage(eligibility.message || 'Invalid PIN entered. Please try again.');
         setPin('');
@@ -291,7 +293,7 @@ export default function PinAttendanceScreen() {
     } catch (err: any) {
       try {
         SoundService.playError();
-      } catch {}
+      } catch { }
       setErrorMessage(err?.message || 'Could not verify student PIN.');
       setPin('');
     } finally {
@@ -432,189 +434,248 @@ export default function PinAttendanceScreen() {
       {/* RESULT MODALS (Matches QR Flow: Check-out, Already Checked-in, etc.) */}
       {/* ======================================================== */}
       <Modal visible={modalVisible} transparent animationType="fade" onRequestClose={closeModal}>
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalCard}>
-            {/* Screen: Check-Out Successful */}
-            {modalResult?.status === 'CHECK_OUT' && (
-              <>
-                <View style={[styles.statusIconCircle, { backgroundColor: Colors.success }]}>
-                  <MaterialIcons name="check" size={48} color={Colors.textWhite} />
-                </View>
-                <Text style={styles.modalHeading}>Checked out successfully!</Text>
+        <TouchableWithoutFeedback onPress={closeModal}>
+          <View style={styles.modalBackdrop}>
+            <TouchableWithoutFeedback onPress={() => { }}>
+              <View style={styles.modalCard}>
+                {/* Screen: Check-Out Successful */}
+                {modalResult?.status === 'CHECK_OUT' && (
+                  <>
+                    <View style={[styles.statusIconCircle, { backgroundColor: Colors.success }]}>
+                      <MaterialIcons name="check" size={48} color={Colors.textWhite} />
+                    </View>
+                    <Text style={styles.modalHeading}>Checked out successfully!</Text>
 
-                <View style={styles.modalStudentBox}>
-                  <StudentAvatar
-                    name={modalResult.studentName}
-                    imageUrl={modalResult.profileImageUrl}
-                  />
-                  <Text style={styles.modalStudentName}>{modalResult.studentName || 'Student Member'}</Text>
-                  {modalResult.className ? <Text style={styles.modalSessionTime}>{modalResult.className}</Text> : null}
-                  {modalResult.sessionTime ? <Text style={styles.modalSessionTime}>{modalResult.sessionTime}</Text> : null}
-                </View>
+                    <View style={styles.modalStudentBox}>
+                      <StudentAvatar
+                        name={modalResult.studentName}
+                        imageUrl={modalResult.profileImageUrl}
+                      />
+                      <Text style={styles.modalStudentName}>{modalResult.studentName || 'Student Member'}</Text>
+                      {modalResult.className ? <Text style={styles.modalSessionTime}>{modalResult.className}</Text> : null}
+                      {modalResult.sessionTime ? <Text style={styles.modalSessionTime}>{modalResult.sessionTime}</Text> : null}
+                    </View>
 
-                <View style={styles.timestampRow}>
-                  {modalResult.checkOutTime && (
-                    <Text style={styles.timestampText}>Checked out at {modalResult.checkOutTime}</Text>
+                    <View style={styles.timestampRow}>
+                      {modalResult.checkOutTime && (
+                        <Text style={styles.timestampText}>Checked out at {modalResult.checkOutTime}</Text>
+                      )}
+                    </View>
+
+                    <TouchableOpacity
+                      style={styles.modalCloseBtn}
+                      onPress={handleReturnToReady}
+                    >
+                      <Text style={styles.modalCloseBtnText}>Done</Text>
+                    </TouchableOpacity>
+                  </>
+                )}
+
+                {/* Screen 7 & 8: Already Checked In (Prompt for Check-out) */}
+                {modalResult?.status === 'ALREADY_CHECKED_IN' && (
+                  <>
+                    <View style={[styles.statusIconCircle, { backgroundColor: Colors.success }]}>
+                      <MaterialIcons name="check" size={48} color={Colors.textWhite} />
+                    </View>
+                    <Text style={styles.modalHeading}>Already checked in</Text>
+
+                    <View style={styles.modalStudentBox}>
+                      <StudentAvatar
+                        name={modalResult.studentName}
+                        imageUrl={modalResult.profileImageUrl}
+                      />
+                      <Text style={styles.modalStudentName}>{modalResult.studentName || 'Student Member'}</Text>
+                      {modalResult.className ? <Text style={styles.modalSessionTime}>{modalResult.className}</Text> : null}
+                      {modalResult.sessionTime ? <Text style={styles.modalSessionTime}>{modalResult.sessionTime}</Text> : null}
+                    </View>
+
+                    {modalResult.checkInTime ? (
+                      <Text style={styles.timestampText}>Checked in at {modalResult.checkInTime}</Text>
+                    ) : null}
+
+                    <View style={styles.infoAlertBox}>
+                      <MaterialIcons name="info" size={18} color={Colors.info} />
+                      <Text style={styles.infoAlertText}>
+                        Student is currently checked in. Do you want to check them out?
+                      </Text>
+                    </View>
+
+                    <View style={styles.actionRow}>
+                      <TouchableOpacity
+                        style={[styles.confirmCheckOutBtn, checkoutInProgress && { opacity: 0.7 }]}
+                        onPress={handleConfirmCheckOut}
+                        disabled={checkoutInProgress}
+                      >
+                        {checkoutInProgress ? (
+                          <ActivityIndicator color={Colors.textWhite} />
+                        ) : (
+                          <Text style={styles.confirmCheckOutBtnText}>Check Out</Text>
+                        )}
+                      </TouchableOpacity>
+
+                      <TouchableOpacity style={styles.cancelBtn} onPress={closeModal}>
+                        <Text style={styles.cancelBtnText}>Cancel</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </>
+                )}
+
+                {/* Screen: Already Attended Today */}
+                {modalResult?.status === 'ALREADY_ATTENDED' && (
+                  <>
+                    <View style={[styles.statusIconCircle, { backgroundColor: Colors.info }]}>
+                      <MaterialIcons name="done-all" size={44} color={Colors.textWhite} />
+                    </View>
+                    <Text style={styles.modalHeading}>Already attended today</Text>
+
+                    <View style={styles.modalStudentBox}>
+                      <StudentAvatar
+                        name={modalResult.studentName}
+                        imageUrl={modalResult.profileImageUrl}
+                      />
+                      <Text style={styles.modalStudentName}>{modalResult.studentName || 'Student Member'}</Text>
+                      {modalResult.className ? <Text style={styles.modalSessionTime}>{modalResult.className}</Text> : null}
+                      {modalResult.sessionTime ? <Text style={styles.modalSessionTime}>{modalResult.sessionTime}</Text> : null}
+                    </View>
+
+                    <Text style={styles.modalDescText}>
+                      {modalResult.message || 'You have already attended this class today.'}
+                    </Text>
+
+                    <TouchableOpacity style={styles.primaryModalBtn} onPress={closeModal}>
+                      <Text style={styles.primaryModalBtnText}>Done</Text>
+                    </TouchableOpacity>
+                  </>
+                )}
+
+                {/* Screen 10: No Eligible Session */}
+                {modalResult?.status === 'NO_SESSION' && (
+                  <>
+                    <View style={[styles.statusIconCircle, { backgroundColor: Colors.error }]}>
+                      <MaterialIcons name="priority-high" size={44} color={Colors.textWhite} />
+                    </View>
+                    <Text style={styles.modalHeading}>No session found</Text>
+                    <View style={styles.modalStudentBox}>
+                      <StudentAvatar
+                        name={modalResult.studentName}
+                        imageUrl={modalResult.profileImageUrl}
+                      />
+                      <Text style={styles.modalStudentName}>{modalResult.studentName || 'Student Member'}</Text>
+                    </View>
+                    <Text style={styles.modalDescText}>
+                      We couldn't find an eligible session at this location right now. Please speak to your instructor.
+                    </Text>
+                    <TouchableOpacity style={styles.primaryModalBtn} onPress={closeModal}>
+                      <Text style={styles.primaryModalBtnText}>Done</Text>
+                    </TouchableOpacity>
+                  </>
+                )}
+
+                {/* Screen 11: Too Early */}
+                {modalResult?.status === 'TOO_EARLY' && (
+                  <>
+                    <View style={[styles.statusIconCircle, { backgroundColor: Colors.warning }]}>
+                      <MaterialIcons name="access-time" size={44} color={Colors.textWhite} />
+                    </View>
+                    <Text style={styles.modalHeading}>You're a little early</Text>
+                    <View style={styles.modalStudentBox}>
+                      <StudentAvatar
+                        name={modalResult.studentName}
+                        imageUrl={modalResult.profileImageUrl}
+                      />
+                      <Text style={styles.modalStudentName}>{modalResult.studentName || 'Student Member'}</Text>
+                      {modalResult.className ? <Text style={styles.modalSessionTime}>{modalResult.className}</Text> : null}
+                    </View>
+                    <Text style={styles.modalDescText}>
+                      {modalResult.opensAt ? `Check-in opens at ${modalResult.opensAt}.` : 'Check-in is not open yet. Please check your class timetable.'}
+                    </Text>
+                    <TouchableOpacity style={styles.modalCloseBtn} onPress={closeModal}>
+                      <Text style={styles.modalCloseBtnText}>Close</Text>
+                    </TouchableOpacity>
+                  </>
+                )}
+
+                {/* Screen 12: Check-In Closed / Out of hours */}
+                {modalResult?.status === 'CHECKIN_CLOSED' && (
+                  <>
+                    <View style={[styles.statusIconCircle, { backgroundColor: Colors.error }]}>
+                      <MaterialIcons name="block" size={44} color={Colors.textWhite} />
+                    </View>
+                    <Text style={styles.modalHeading}>Check-in has closed</Text>
+                    <View style={styles.modalStudentBox}>
+                      <StudentAvatar
+                        name={modalResult.studentName}
+                        imageUrl={modalResult.profileImageUrl}
+                      />
+                      <Text style={styles.modalStudentName}>{modalResult.studentName || 'Student Member'}</Text>
+                      {modalResult.className ? <Text style={styles.modalSessionTime}>{modalResult.className}</Text> : null}
+                      {modalResult.sessionTime ? <Text style={styles.modalSessionTime}>{modalResult.sessionTime}</Text> : null}
+                    </View>
+                    <Text style={styles.modalDescText}>
+                      {modalResult.message || 'This session check-in window has ended. Please speak to your instructor.'}
+                    </Text>
+                    <TouchableOpacity style={styles.modalCloseBtn} onPress={closeModal}>
+                      <Text style={styles.modalCloseBtnText}>Close</Text>
+                    </TouchableOpacity>
+                  </>
+                )}
+
+                {/* Screen 13: Invalid PIN / Code */}
+                {modalResult?.status === 'INVALID_CODE' && (
+                  <>
+                    <View style={[styles.statusIconCircle, { backgroundColor: Colors.error }]}>
+                      <MaterialIcons name="close" size={48} color={Colors.textWhite} />
+                    </View>
+                    <Text style={styles.modalHeading}>PIN not recognised</Text>
+                    <Text style={styles.modalDescText}>
+                      {modalResult.message || 'Please check your PIN and try again.'}
+                    </Text>
+                    <TouchableOpacity style={styles.primaryModalBtn} onPress={closeModal}>
+                      <Text style={styles.primaryModalBtnText}>Try again</Text>
+                    </TouchableOpacity>
+                  </>
+                )}
+
+                {/* Fallback Catch-All: For any unhandled status (e.g. REJECTED, OUT_OF_HOURS, error, etc.) */}
+                {![
+                  'CHECK_OUT',
+                  'ALREADY_CHECKED_IN',
+                  'ALREADY_ATTENDED',
+                  'NO_SESSION',
+                  'TOO_EARLY',
+                  'CHECKIN_CLOSED',
+                  'INVALID_CODE',
+                ].includes(modalResult?.status || '') && (
+                    <>
+                      <View style={[styles.statusIconCircle, { backgroundColor: Colors.warning }]}>
+                        <MaterialIcons name="warning-amber" size={44} color={Colors.textWhite} />
+                      </View>
+                      <Text style={styles.modalHeading}>
+                        {modalResult?.status === 'REJECTED' ? 'Check-in Not Available' : 'Attendance Notice'}
+                      </Text>
+                      {modalResult?.studentName ? (
+                        <View style={styles.modalStudentBox}>
+                          <StudentAvatar
+                            name={modalResult.studentName}
+                            imageUrl={modalResult.profileImageUrl}
+                          />
+                          <Text style={styles.modalStudentName}>{modalResult.studentName}</Text>
+                          {modalResult.className ? <Text style={styles.modalSessionTime}>{modalResult.className}</Text> : null}
+                          {modalResult.sessionTime ? <Text style={styles.modalSessionTime}>{modalResult.sessionTime}</Text> : null}
+                        </View>
+                      ) : null}
+                      <Text style={styles.modalDescText}>
+                        {modalResult?.message || 'Unable to check in at this time. Please speak to your instructor.'}
+                      </Text>
+                      <TouchableOpacity style={styles.primaryModalBtn} onPress={closeModal}>
+                        <Text style={styles.primaryModalBtnText}>Close</Text>
+                      </TouchableOpacity>
+                    </>
                   )}
-                </View>
-
-                <TouchableOpacity
-                  style={styles.modalCloseBtn}
-                  onPress={handleReturnToReady}
-                >
-                  <Text style={styles.modalCloseBtnText}>Done</Text>
-                </TouchableOpacity>
-              </>
-            )}
-
-            {/* Screen 7 & 8: Already Checked In (Prompt for Check-out) */}
-            {modalResult?.status === 'ALREADY_CHECKED_IN' && (
-              <>
-                <View style={[styles.statusIconCircle, { backgroundColor: Colors.success }]}>
-                  <MaterialIcons name="check" size={48} color={Colors.textWhite} />
-                </View>
-                <Text style={styles.modalHeading}>Already checked in</Text>
-
-                <View style={styles.modalStudentBox}>
-                  <StudentAvatar
-                    name={modalResult.studentName}
-                    imageUrl={modalResult.profileImageUrl}
-                  />
-                  <Text style={styles.modalStudentName}>{modalResult.studentName || 'Student Member'}</Text>
-                  {modalResult.className ? <Text style={styles.modalSessionTime}>{modalResult.className}</Text> : null}
-                  {modalResult.sessionTime ? <Text style={styles.modalSessionTime}>{modalResult.sessionTime}</Text> : null}
-                </View>
-
-                {modalResult.checkInTime ? (
-                  <Text style={styles.timestampText}>Checked in at {modalResult.checkInTime}</Text>
-                ) : null}
-
-                <View style={styles.infoAlertBox}>
-                  <MaterialIcons name="info" size={18} color={Colors.info} />
-                  <Text style={styles.infoAlertText}>
-                    Student is currently checked in. Do you want to check them out?
-                  </Text>
-                </View>
-
-                <View style={styles.actionRow}>
-                  <TouchableOpacity
-                    style={[styles.confirmCheckOutBtn, checkoutInProgress && { opacity: 0.7 }]}
-                    onPress={handleConfirmCheckOut}
-                    disabled={checkoutInProgress}
-                  >
-                    {checkoutInProgress ? (
-                      <ActivityIndicator color={Colors.textWhite} />
-                    ) : (
-                      <Text style={styles.confirmCheckOutBtnText}>Check Out</Text>
-                    )}
-                  </TouchableOpacity>
-
-                  <TouchableOpacity style={styles.cancelBtn} onPress={closeModal}>
-                    <Text style={styles.cancelBtnText}>Cancel</Text>
-                  </TouchableOpacity>
-                </View>
-              </>
-            )}
-
-            {/* Screen: Already Attended Today */}
-            {modalResult?.status === 'ALREADY_ATTENDED' && (
-              <>
-                <View style={[styles.statusIconCircle, { backgroundColor: Colors.info }]}>
-                  <MaterialIcons name="done-all" size={44} color={Colors.textWhite} />
-                </View>
-                <Text style={styles.modalHeading}>Already attended today</Text>
-
-                <View style={styles.modalStudentBox}>
-                  <StudentAvatar
-                    name={modalResult.studentName}
-                    imageUrl={modalResult.profileImageUrl}
-                  />
-                  <Text style={styles.modalStudentName}>{modalResult.studentName || 'Student Member'}</Text>
-                  {modalResult.className ? <Text style={styles.modalSessionTime}>{modalResult.className}</Text> : null}
-                  {modalResult.sessionTime ? <Text style={styles.modalSessionTime}>{modalResult.sessionTime}</Text> : null}
-                </View>
-
-                <Text style={styles.modalDescText}>
-                  {modalResult.message || 'You have already attended this class today.'}
-                </Text>
-
-                <TouchableOpacity style={styles.primaryModalBtn} onPress={closeModal}>
-                  <Text style={styles.primaryModalBtnText}>Done</Text>
-                </TouchableOpacity>
-              </>
-            )}
-
-            {/* Screen 10: No Eligible Session */}
-            {modalResult?.status === 'NO_SESSION' && (
-              <>
-                <View style={[styles.statusIconCircle, { backgroundColor: Colors.error }]}>
-                  <MaterialIcons name="priority-high" size={44} color={Colors.textWhite} />
-                </View>
-                <Text style={styles.modalHeading}>No session found</Text>
-                <View style={styles.modalStudentBox}>
-                  <StudentAvatar
-                    name={modalResult.studentName}
-                    imageUrl={modalResult.profileImageUrl}
-                  />
-                  <Text style={styles.modalStudentName}>{modalResult.studentName || 'Student Member'}</Text>
-                </View>
-                <Text style={styles.modalDescText}>
-                  We couldn't find an eligible session at this location right now. Please speak to your instructor.
-                </Text>
-                <TouchableOpacity style={styles.primaryModalBtn} onPress={closeModal}>
-                  <Text style={styles.primaryModalBtnText}>Done</Text>
-                </TouchableOpacity>
-              </>
-            )}
-
-            {/* Screen 11: Too Early */}
-            {modalResult?.status === 'TOO_EARLY' && (
-              <>
-                <View style={[styles.statusIconCircle, { backgroundColor: Colors.warning }]}>
-                  <MaterialIcons name="access-time" size={44} color={Colors.textWhite} />
-                </View>
-                <Text style={styles.modalHeading}>You're a little early</Text>
-                <View style={styles.modalStudentBox}>
-                  <StudentAvatar
-                    name={modalResult.studentName}
-                    imageUrl={modalResult.profileImageUrl}
-                  />
-                  <Text style={styles.modalStudentName}>{modalResult.studentName || 'Student Member'}</Text>
-                  {modalResult.className ? <Text style={styles.modalSessionTime}>{modalResult.className}</Text> : null}
-                </View>
-                <Text style={styles.modalDescText}>
-                  {modalResult.opensAt ? `Check-in opens at ${modalResult.opensAt}.` : 'Check-in is not open yet. Please check your class timetable.'}
-                </Text>
-                <TouchableOpacity style={styles.modalCloseBtn} onPress={closeModal}>
-                  <Text style={styles.modalCloseBtnText}>Close</Text>
-                </TouchableOpacity>
-              </>
-            )}
-
-            {/* Screen 12: Check-In Closed */}
-            {modalResult?.status === 'CHECKIN_CLOSED' && (
-              <>
-                <View style={[styles.statusIconCircle, { backgroundColor: Colors.error }]}>
-                  <MaterialIcons name="block" size={44} color={Colors.textWhite} />
-                </View>
-                <Text style={styles.modalHeading}>Check-in has closed</Text>
-                <View style={styles.modalStudentBox}>
-                  <StudentAvatar
-                    name={modalResult.studentName}
-                    imageUrl={modalResult.profileImageUrl}
-                  />
-                  <Text style={styles.modalStudentName}>{modalResult.studentName || 'Student Member'}</Text>
-                </View>
-                <Text style={styles.modalDescText}>
-                  This session check-in window has ended. Please speak to your instructor.
-                </Text>
-                <TouchableOpacity style={styles.modalCloseBtn} onPress={closeModal}>
-                  <Text style={styles.modalCloseBtnText}>Close</Text>
-                </TouchableOpacity>
-              </>
-            )}
+              </View>
+            </TouchableWithoutFeedback>
           </View>
-        </View>
+        </TouchableWithoutFeedback>
       </Modal>
     </SafeAreaView>
   );

@@ -9,6 +9,7 @@ import {
   StaffVerifyPinRequest,
   StaffVerifyPinResponse,
   AttendanceEligibilityResponse,
+  EligibilityStatus,
   CheckInRequest,
   CheckInResponse,
   CheckOutRequest,
@@ -550,15 +551,45 @@ export const DeviceApiService = {
     const resolvedClassSessionId = payload?.classSessionId || firstSess?.classSessionId || firstSess?.id;
     const resolvedClassName = payload?.className || firstSess?.title || firstSess?.className || firstSess?.name;
     const resolvedSessionTime = payload?.sessionTime || (firstSess?.startsAt ? `${firstSess.startsAt.substring(0, 5)} – ${firstSess.endsAt ? firstSess.endsAt.substring(0, 5) : ''}` : undefined);
-    const resolvedStatus = firstSess?.eligibilityStatus === 'ALREADY_ATTENDED'
-      ? 'ALREADY_ATTENDED'
-      : (firstSess?.nextAction === 'CHECK_OUT' || firstSess?.eligibilityStatus === 'ALREADY_CHECKED_IN'
-        ? 'ALREADY_CHECKED_IN'
-        : (firstSess?.nextAction === 'CHECK_IN' && firstSess?.eligible !== false
-          ? 'CHECK_IN'
-          : (payload?.status === 'success' && (!payload?.sessions || payload.sessions.length === 0)
-            ? 'NO_SESSION'
-            : (firstSess?.eligibilityStatus || payload?.status || 'NO_SESSION')))) as any;
+    const rawStatus = String(firstSess?.eligibilityStatus || payload?.status || '').toUpperCase();
+    const reasonText = String(firstSess?.reason || payload?.message || '').toUpperCase();
+
+    // Check if session check-in is closed, late, expired, or out of attendance hours
+    const isClosedOrOutOfHours =
+      rawStatus === 'CHECKIN_CLOSED' ||
+      rawStatus === 'CLOSED' ||
+      rawStatus === 'OUT_OF_HOURS' ||
+      rawStatus === 'SESSION_ENDED' ||
+      rawStatus === 'CLASS_ENDED' ||
+      rawStatus === 'WINDOW_CLOSED' ||
+      rawStatus === 'TOO_LATE' ||
+      rawStatus === 'LATE' ||
+      rawStatus === 'EXPIRED' ||
+      reasonText.includes('CLOSED') ||
+      reasonText.includes('ENDED') ||
+      reasonText.includes('EXPIRED') ||
+      reasonText.includes('LATE') ||
+      reasonText.includes('OUT OF HOURS') ||
+      reasonText.includes('WINDOW');
+
+    let resolvedStatus: EligibilityStatus = 'NO_SESSION';
+    if (firstSess?.eligibilityStatus === 'ALREADY_ATTENDED') {
+      resolvedStatus = 'ALREADY_ATTENDED';
+    } else if (firstSess?.nextAction === 'CHECK_OUT' || firstSess?.eligibilityStatus === 'ALREADY_CHECKED_IN') {
+      resolvedStatus = 'ALREADY_CHECKED_IN';
+    } else if (firstSess?.nextAction === 'CHECK_IN' && firstSess?.eligible !== false) {
+      resolvedStatus = 'CHECK_IN';
+    } else if (isClosedOrOutOfHours) {
+      resolvedStatus = 'CHECKIN_CLOSED';
+    } else if (rawStatus === 'TOO_EARLY' || reasonText.includes('EARLY')) {
+      resolvedStatus = 'TOO_EARLY';
+    } else if (payload?.status === 'success' && (!payload?.sessions || payload.sessions.length === 0)) {
+      resolvedStatus = 'NO_SESSION';
+    } else if (firstSess?.eligibilityStatus) {
+      resolvedStatus = firstSess.eligibilityStatus as EligibilityStatus;
+    } else if (payload?.status) {
+      resolvedStatus = payload.status as EligibilityStatus;
+    }
 
     const resolvedStudentName = payload?.student?.fullName
       || (payload?.student?.firstName ? `${payload.student.firstName} ${payload.student.lastName || ''}`.trim() : null)
@@ -573,9 +604,16 @@ export const DeviceApiService = {
       payload?.studentProfileImageUrl ||
       null;
 
+    let resolvedMessage = payload?.message || firstSess?.reason;
+    if (resolvedStatus === 'CHECKIN_CLOSED' && !resolvedMessage) {
+      resolvedMessage = 'This session check-in window has ended. Please speak to your instructor.';
+    } else if (resolvedStatus === 'NO_SESSION' && !resolvedMessage) {
+      resolvedMessage = 'No active sessions scheduled for this student right now.';
+    }
+
     return {
       status: resolvedStatus,
-      message: payload?.message || firstSess?.reason || (payload?.sessions?.length === 0 ? 'No active sessions scheduled for this student right now.' : undefined),
+      message: resolvedMessage,
       studentName: resolvedStudentName,
       studentId: payload?.student?.id || payload?.studentId,
       student: payload?.student,
